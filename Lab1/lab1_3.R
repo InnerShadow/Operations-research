@@ -33,3 +33,8 @@ plot_ly(z = ~z) |> add_surface()
 
 z <- outer(x, y, FUN = F)
 plot_ly(x = ~x, y = ~y, z = ~z, type = "contour")
+
+solution <- optim(c(0, 0), function(vec) F(vec[1], vec[2]))
+min_point <- solution$par
+min_point
+

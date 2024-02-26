@@ -23,7 +23,7 @@ dy <- dF(x, r)
 data <- data.frame(x, y)
 dData <- data.frame(x, dy)
 
-fig <- plot_ly(data, x = ~x, y=~y,type = 'scatter', mode = 'lines') %>%
+fig <- plot_ly(data, x = ~x, y = ~y,type = 'scatter', mode = 'lines') %>%
   add_trace(Ddata, x = ~x, y = ~dy,type = 'scatter', mode = 'lines')
 
 fig
