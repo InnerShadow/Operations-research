@@ -97,13 +97,13 @@ F <- function(x, y){
 }
 
 x <- y <- seq(-5, 5, length.out = 100)
-z <- outer(x, y, FUN = F)
+z <-t(outer(x, y, FUN = F))
 plot_ly(z = ~z) |> add_surface()
 ```
 
 ```{r}
 
-z <- outer(x, y, FUN = F)
+z <- t(outer(x, y, FUN = F))
 plot_ly(x = ~x, y = ~y, z = ~z, type = "contour")
 ```
 
@@ -128,12 +128,12 @@ F <- function(x, y){
 }
 
 x <- y <- seq(-5, 5, length.out = 100)
-z <- outer(x, y, FUN = F)
+z <- t(outer(x, y, FUN = F))
 plot_ly(z = ~z) |> add_surface()
 ```
 
 ```{r}
-z <- outer(x, y, FUN = F)
+z <- t(outer(x, y, FUN = F))
 plot_ly(x = ~x, y = ~y, z = ~z, type = "contour")
 ```
 
