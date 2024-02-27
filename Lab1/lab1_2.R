@@ -28,6 +28,6 @@ fig <- plot_ly(data, x = ~x, y = ~y,type = 'scatter', mode = 'lines') %>%
 
 fig
 
-op <- optimise(F, c(0, 5))
-cat(op$objective)
-cat(dF(op$minimum))
+op <- optimise(F, c(0, 5), maximum = T)
+cat(op$maximum)
+cat(F(op$maximum))

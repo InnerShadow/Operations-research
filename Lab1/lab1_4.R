@@ -7,14 +7,6 @@ F <- function(x, y){
   x * y
 }
 
-dFdx <- function(x, y){
-  y
-}
-
-dFdy <- function(x, y){
-  x
-}
-
 x <- y <- seq(-5, 5, length.out = 100)
 z <- outer(x, y, FUN = F)
 plot_ly(z = ~z) |> add_surface()
@@ -25,4 +17,4 @@ plot_ly(x = ~x, y = ~y, z = ~z, type = "contour")
 solution <- optim(c(0, 0), function(vec) F(vec[1], vec[2]))
 min_point <- solution$par
 min_point
-
+F(min_point[1], min_point[2])

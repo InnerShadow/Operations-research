@@ -15,11 +15,11 @@ y <- F(x)
 dy <- dF(x)
 data <- data.frame(x, y)
 Ddata <- data.frame(x, dy)
-fig <- plot_ly(data, x = ~x, y=~y,type = 'scatter', mode = 'lines') %>%
+fig <- plot_ly(data, x = ~x, y = ~y,type = 'scatter', mode = 'lines') %>%
   add_trace(Ddata, x = ~x, y = ~dy,type = 'scatter', mode = 'lines')
 
 fig
 
 op <- optimise(F, c(-5, 10))
 cat(op$objective)
-cat(dF(op$minimum))
+cat(F(op$minimum))
