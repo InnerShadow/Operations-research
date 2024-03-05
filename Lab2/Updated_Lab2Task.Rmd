@@ -141,7 +141,6 @@ optimum
 optimum$solution
 ```
 
-
 ## Other library option
 
 ```{r}
@@ -210,7 +209,6 @@ cat("\n\n")
 optimum$sens.coef.to
 ```
 
-
 ## Updated task: dismiss сriterion of simultaneous completion of work
 
 ```{r}
@@ -275,31 +273,24 @@ optimum$sens.coef.from
 optimum$sens.coef.to
 ```
 
-```{=latex}
 $$\begin{cases}
       \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}-q_n*x_n\\
       \begin{cases}
-        x_1+x_2+x_3+x_4\leq400, x_n \notin Cluster_1\\
-        x_1+x_2+x_3+x_4-x_n\leq400, x_n \in Cluster_1\\
+            x_1+x_2+x_3+x_4\leq400, x_n \notin Cluster_1\\
+            x_1+x_2+x_3+x_4-x_n\leq400, x_n \in Cluster_1\\
       \end{cases}\\
-         
       \begin{cases}
-        x_5+x_6\leq800, x_n \notin Cluster_2\\
-        x_5+x_6-x_n\leq800, x_n \in Cluster_2\\
+            x_5+x_6\leq800, x_n \notin Cluster_2\\
+            x_5+x_6-x_n\leq800, x_n \in Cluster_2\\
       \end{cases}\\
-      
       \begin{cases}
-        x_7+x_8+x_9+x_{10}\leq600, x_n \notin Cluster_3\\
-        x_7+x_8+x_9+x_{10}-x_n\leq600, x_n \in Cluster_3\\
+            x_7+x_8+x_9+x_{10}\leq600, x_n \notin Cluster_3\\
+            x_7+x_8+x_9+x_{10}-x_n\leq600, x_n \in Cluster_3\\
       \end{cases}\\
-      
       \sum_{i=1}^{10} {x_i}-x_n=1000\\
       x_1+x_2+x_3+x_4+x_7+x_8+x_9+x_{10}-x_n\geq700\\
       \forall{i}: 0\leq x_i\leq700, i \neq n, x_n=0
-\end{cases}
-$$
-```
-![](formula.png)
+\end{cases}\,$$
 
 ## If one of computers out of work task
 
@@ -442,7 +433,7 @@ n_out_of_work_sensetive
 ### Complite table
 
 | x\_#experement\_#computer |           target            |               value               |                    from                    |                    till                    |
-|:-----------:|:-----------------------:|:----------:|:----------:|:----------:|
+|:------------:|:--------------:|:------------:|:------------:|:------------:|
 |           x1_1            |   `r time_request_target`   |   `r time_request_variables[1]`   |   `r time_request_sensetive$objfrom[1]`    |   `r time_request_sensetive$objtill[1]`    |
 |           x1_2            |   `r time_request_target`   |   `r time_request_variables[2]`   |   `r time_request_sensetive$objfrom[2]`    |   `r time_request_sensetive$objtill[2]`    |
 |           x1_3            |   `r time_request_target`   |   `r time_request_variables[3]`   |   `r time_request_sensetive$objfrom[3]`    |   `r time_request_sensetive$objtill[3]`    |
