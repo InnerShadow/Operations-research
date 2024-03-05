@@ -1,0 +1,593 @@
+---
+title: Лабораторная работа 2. Задания
+author: "Сікаленка Міхаіл Аляксандравіч, 7 ПІ"
+date: "05/03/2024"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document:
+    latex_engine: lualatex
+    includes:
+      in_header: preamble.tex
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+# Задание
+
+Найти размещение данных по вычислительным станциям в распределённой вычислительной сети на основе кластеров (см. Рисунок 1).
+Провести анализ ограничений.
+
+![Рисунок 1. Структура распределённой вычислительной сети на основе кластеров](Img1.png)
+
+В глобальной компьютерной сети сформирована распределенная вычислительная среда, состоящая из $N$ высокопроизводительных рабочих станций, объединенных в $M$ групп (кластеров).
+Данные для обработки однородны и трудоемкость расчетов зависит только от их объема.
+Данные независимы и их отдельные массивы могут обрабатываться совершенно независимо.
+Известно время обработки 1 Мб данных на каждой рабочей станции $q_i$.
+Необходимо найти оптимальное распределение заданного объема данных для обработки на станциях.
+Так как рабочие станции должны использоваться и для решения других (локальных) задач необходимо минимизировать общее время загрузки всех рабочих станций.
+Желательно, чтобы результаты обработки от разных кластеров поступали одновременно.
+Кроме того, владельцами кластеров могут ограничиваться как объемы информации, обрабатываемой их кластерами, так и объемы, обрабатываемые отдельными рабочими станциями.
+Множество возможных альтернатив определяется объемом данных $s_i$, направляемых для обработки на $i$-ю станцию.
+
+Варьируемые параметры -- вектор значений объема данных, направляемого для обработки на каждую станцию.
+Фиксированные независимые параметры -- времена обработки $a_i$, 1 Мб данных $i$-й станцией, предельно допустимые объемы информации, которые могут быть обработаны $i$-й станцией $P_i$, $i=1,2,...,N$ и $j$-м кластером $R_j$, $j=1,2,...,M$; объем данных, подлежащий обработке $X$.
+
+Цель - минимизация суммарного времени загрузки всех станций.
+
+Ограничения: суммарный объем обрабатываемых данных равен $X$, объем данных, обрабатываемый каждой $i$-й станцией больше или равен 0, но меньше или равен $P_i$, объем данных, обрабатываемый каждым $j$-м кластером меньше или равен $R_j$; времена обработки данных кластерами равны.
+
+Таким образом, линейную модель можно записать как минимизацию общего времени обработки данных в системе
+
+$$\min{F(\vec{x})}=\sum_{i=1}^{N} q_ix_i$$
+
+при условии равенства фактического объёма обрабатываемых рабочими станциями данных требуемому: $$\sum_{i=1}^{N} x_i=X$$ при условии, что нагрузка на каждую станцию находится в допустимом диапазоне: $$x_i\geq0,x_i\leq P_i, i=1,2,...,N$$ при условии, что общий объём данных, обрабатываемый кластером, не превышает установленной величины: $$\sum_{i=1}^{m_1} x_i\leq R_1, \sum_{i=m_1+1}^{m_2} x_i\leq R_2, \sum_{i=m_{M-1}+1}^{N} x_i\leq R_M$$ при условии равенства времён обработки на всех кластерах: $$\sum_{i=1}^{m_1} x_i =\sum_{i=m_1+1}^{m_2} x_i, \sum_{i=m_2+1}^{m_3} x_i =\sum_{i=1}^{m_1} x_i, \sum_{i=m_{M-1}+1}^{N} x_i =\sum_{i=1}^{m_1} x_i$$
+
+**Замечание**: это условие вынуждает использовать искусственное начальное решение, и, как следствие, применять для решения задачи M-метод или двухэтапный метод.
+По этой причине изначально оно рассматриваться не будет, и будет введено лишь при изучении искусственного начального решения.
+
+# Пример
+
+Запишем исходные данные для решения конкретной задачи размещения данных:
+
+-   Количество кластеров $M=3$
+-   Количество рабочих станций $N=10$
+-   В первом кластере 4 станции, во втором -- 2, в третьем -- 4, т.е. $m_1=4$, $m_2=6$, $m_3=10$
+-   Время обработки данных станциями $q_1=10$, $q_2=4$, $q_3=8$, $q_4=6$, $q_5=2$, $q_6=3$, $q_7=8$, $q_8=2$, $q_9=6$, $q_10=6$
+-   Ограничения на объём данных, обрабатываемых каждой станцией: $P_1=700$, $P_2=700$, $P_3=700$, $P_4=700$, $P_5=700$, $P_6=700$, $P_7=700$, $P_8=700$, $P_9=700$, $P_10=700$
+-   Ограничения на объём данных, обрабатываемых каждым кластером: $R_1=400$, $R_2=800$, $R_3=600$ Общий объём обрабатываемых данных $1000$ Мб.
+-   Время обработки должно совпадать.
+
+$$\begin{cases}
+          \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+          x_1+x_2+x_3+x_4\leq400\\
+          x_5+x_6\leq800\\
+          x_7+x_8+x_9+x_{10}\leq600\\
+          \sum_{i=1}^{10} x_i=1000\\
+          10x_1+4x_2+8x_3+6x_4-2x_5-3x_6=0\\
+          10x_1+4x_2+8x_3+6x_4-8x_7-2x_8-6x_9-6x_{10}=0\\
+          \forall{i}: 0\leq x_i\leq700
+  \end{cases}\,$$
+
+# Анализ ограничений
+
+1.  Нагрузка между кластерами должна распределяться равномерно. (Убрать: Время обработки должно совпадать) $$x_1+x_2+x_3+x_4-x_5-x_6=0$$ $$x_1+x_2+x_3+x_4-x_7-x_8-x_9-x_{10}=0$$
+2.  Один из серверов, обеспечивающих работу сети, выходит из строя. Чтобы сохранить стабильность работы кластера, необходимо автоматически исключить неработающую машину из системы, а нагрузку, которая шла на нее, распределить между функционирующими устройствами.
+
+# Варианты
+
+## Вариант 1
+
+$$\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+      x_1+x_2+x_3+x_4\leq400\\
+      x_5+x_6\leq800\\
+      x_7+x_8+x_9+x_{10}\leq600\\
+      \sum_{i=1}^{10} x_i=1000\\
+      10x_1+4x_2+8x_3+6x_4-2x_5-3x_6=0\\
+      x_1+x_2+x_3+x_4+x_7+x_8+x_9+x_{10}\geq700\\
+      \forall{i}: 0\leq x_i\leq700
+\end{cases}\,$$
+
+## Primal oprion
+
+```{r}
+library(lpSolve)
+
+# Coefficients from min F(x)
+Fun <- c(10, 4, 8, 6, 2, 3, 8, 2, 6, 6)
+
+# Boarders (coefficients near limitations)
+A <- rbind(c(1, 1, 1, 1, 0, 0, 0, 0, 0, 0), # 1'st claster
+           c(0, 0, 0, 0, 1, 1, 0, 0, 0, 0), # 2'nd claster
+           c(0, 0, 0, 0, 0, 0, 1, 1, 1, 1), # 3'th claster
+           c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1), # total sum = 1000
+           c(10, 4, 8, 6, -2, -3, 0, 0, 0, 0), # сriterion of simultaneous completion of work
+           c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1), # sum data proceeding >= 700
+           c(1, 0, 0, 0, 0, 0, 0, 0, 0, 0), # x1 <= 700
+           c(0, 1, 0, 0, 0, 0, 0, 0, 0, 0), # x2 >= 700
+           c(0, 0, 1, 0, 0, 0, 0, 0, 0, 0), # x3 >= 700
+           c(0, 0, 0, 1, 0, 0, 0, 0, 0, 0), # x4 >= 700
+           c(0, 0, 0, 0, 1, 0, 0, 0, 0, 0), # x5 <= 700
+           c(0, 0, 0, 0, 0, 1, 0, 0, 0, 0), # x6 <= 700
+           c(0, 0, 0, 0, 0, 0, 1, 0, 0, 0), # x7 <= 700
+           c(0, 0, 0, 0, 0, 0, 0, 1, 0, 0), # x8 <= 700
+           c(0, 0, 0, 0, 0, 0, 0, 0, 1, 0), # x9 <= 700
+           c(0, 0, 0, 0, 0, 0, 0, 0, 0, 1)) # x10 <= 700
+
+# The right sides
+
+B <- c(400, 800, 600, 1000, 0, 700,
+       700, 700, 700, 700, 700, 700, 700, 700, 700, 700)
+
+# Signs
+
+CD <- c("<=", "<=", "<=", "=", "=", ">=",
+        "<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=")
+
+optimum <- lp(
+  direction = "min",
+  objective.in = Fun,
+  const.mat = A,
+  const.dir = CD,
+  const.rhs = B,
+  compute.sens = TRUE)
+optimum
+```
+
+```{r}
+optimum$solution
+```
+
+
+## Other library option
+
+```{r}
+library(lpSolveAPI)
+
+# Create function with 10 features & 0 limitations
+lprob <- make.lp(0, 10)
+
+# Try to minimaze resualt
+stub <- lp.control(lprob, sense = "min")
+rm(stub)
+
+add.constraint(lprob, c(1, 1, 1, 1, 0, 0, 0, 0, 0, 0), "<=", 400)
+add.constraint(lprob, c(0, 0, 0, 0, 1, 1, 0, 0, 0, 0), "<=", 800)
+add.constraint(lprob, c(0, 0, 0, 0, 0, 0, 1, 1, 1, 1), "<=", 600)
+add.constraint(lprob, c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1), "=", 1000)
+add.constraint(lprob, c(10, 4, 8, 6, -2, -3, 0, 0, 0, 0), "=", 0)
+add.constraint(lprob, c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1), ">=", 700)
+add.constraint(lprob, c(1, 0, 0, 0, 0, 0, 0, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 1, 0, 0, 0, 0, 0, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 1, 0, 0, 0, 0, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 1, 0, 0, 0, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 0, 1, 0, 0, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 0, 0, 1, 0, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 0, 0, 0, 1, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 0, 0, 0, 0, 1, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 0, 0, 0, 0, 0, 1, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 0, 0, 0, 0, 0, 0, 1), "<=", 700)
+```
+
+```{r}
+set.objfn(lprob, c(10, 4, 8, 6, 2, 3, 8, 2, 6, 6))
+lprob
+```
+
+```{r}
+# Solve 
+status_code <- solve(lprob)
+time_request_target <- get.objective(lprob)
+time_request_target
+```
+
+```{r}
+time_request_variables <- get.variables(lprob)
+time_request_variables
+```
+
+```{r}
+# Sensitive
+original_options <- options(digits = 3, scipen = 30)
+
+time_request_sensetive <- sensitivity_results <- get.sensitivity.obj(lprob)
+
+for (i in 1:length(sensitivity_results$objfrom)) {
+  cat(paste("x", i, "\t| [", sensitivity_results$objfrom[i], ", ", sensitivity_results$objtill[i], "]\n", sep = ""))
+}
+```
+
+```{r}
+get.sensitivity.rhs(lprob)
+```
+
+```{r}
+optimum$sens.coef.from
+cat("\n\n")
+optimum$sens.coef.to
+```
+
+
+## Updated task: dismiss сriterion of simultaneous completion of work
+
+```{r}
+# Dismiss сriterion of simultaneous completion of work
+library(lpSolveAPI)
+
+# Create function with 10 features & 0 limitations
+lprob <- make.lp(0, 10)
+
+# Try to minimaze resualt
+stub <- lp.control(lprob, sense = "min")
+rm(stub)
+
+add.constraint(lprob, c(1, 1, 1, 1, 0, 0, 0, 0, 0, 0), "<=", 400)
+add.constraint(lprob, c(0, 0, 0, 0, 1, 1, 0, 0, 0, 0), "<=", 800)
+add.constraint(lprob, c(0, 0, 0, 0, 0, 0, 1, 1, 1, 1), "<=", 600)
+add.constraint(lprob, c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1), "=", 1000)
+# add.constraint(lprob, c(10, 4, 8, 6, -2, -3, 0, 0, 0, 0), "=", 0)
+add.constraint(lprob, c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1), ">=", 700)
+add.constraint(lprob, c(1, 0, 0, 0, 0, 0, 0, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 1, 0, 0, 0, 0, 0, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 1, 0, 0, 0, 0, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 1, 0, 0, 0, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 0, 1, 0, 0, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 0, 0, 1, 0, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 0, 0, 0, 1, 0, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 0, 0, 0, 0, 1, 0, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 0, 0, 0, 0, 0, 1, 0), "<=", 700)
+add.constraint(lprob, c(0, 0, 0, 0, 0, 0, 0, 0, 0, 1), "<=", 700)
+```
+
+```{r}
+set.objfn(lprob, c(10, 4, 8, 6, 2, 3, 8, 2, 6, 6))
+lprob
+```
+
+```{r}
+# Solve 
+status_code <- solve(lprob)
+non_time_request_target <- get.objective(lprob)
+non_time_request_target
+```
+
+```{r}
+non_time_request_varibles <- get.variables(lprob)
+non_time_request_varibles
+```
+
+```{r}
+# Sensitive
+original_options <- options(digits = 3, scipen = 30)
+
+non_time_request_sensetive <- sensitivity_results <- get.sensitivity.obj(lprob)
+
+for (i in 1:length(sensitivity_results$objfrom)) {
+  cat(paste("x", i, "\t| [", sensitivity_results$objfrom[i], ", ", sensitivity_results$objtill[i], "]\n", sep = ""))
+}
+```
+
+```{r}
+optimum$sens.coef.from
+optimum$sens.coef.to
+```
+
+```{=latex}
+$$\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}-q_n*x_n\\
+      \begin{cases}
+        x_1+x_2+x_3+x_4\leq400, x_n \notin Cluster_1\\
+        x_1+x_2+x_3+x_4-x_n\leq400, x_n \in Cluster_1\\
+      \end{cases}\\
+         
+      \begin{cases}
+        x_5+x_6\leq800, x_n \notin Cluster_2\\
+        x_5+x_6-x_n\leq800, x_n \in Cluster_2\\
+      \end{cases}\\
+      
+      \begin{cases}
+        x_7+x_8+x_9+x_{10}\leq600, x_n \notin Cluster_3\\
+        x_7+x_8+x_9+x_{10}-x_n\leq600, x_n \in Cluster_3\\
+      \end{cases}\\
+      
+      \sum_{i=1}^{10} {x_i}-x_n=1000\\
+      x_1+x_2+x_3+x_4+x_7+x_8+x_9+x_{10}-x_n\geq700\\
+      \forall{i}: 0\leq x_i\leq700, i \neq n, x_n=0
+\end{cases}
+$$
+```
+![](formula.png)
+
+## If one of computers out of work task
+
+```{r}
+
+# n computer out of work
+n <- 5
+
+q_coefs <- c(10, 4, 8, 6, 2, 3, 8, 2, 6, 6)
+cluster_1 <- c(1, 1, 1, 1, 0, 0, 0, 0, 0, 0)
+cluster_2 <- c(0, 0, 0, 0, 1, 1, 0, 0, 0, 0)
+cluster_3 <- c(0, 0, 0, 0, 0, 0, 1, 1, 1, 1)
+whole_sum <- c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+
+cluster_1[n] <- 0
+cluster_2[n] <- 0
+cluster_3[n] <- 0
+whole_sum[n] <- 0
+
+# Create function with 10 features & 0 limitations
+lprob <- make.lp(0, 10)
+
+# Try to minimaze resualt
+stub <- lp.control(lprob, sense = "min")
+rm(stub)
+
+add.constraint(lprob, cluster_1, "<=", 400)
+add.constraint(lprob, cluster_2, "<=", 800)
+add.constraint(lprob, cluster_3, "<=", 600)
+add.constraint(lprob, whole_sum, "=", 1000)
+add.constraint(lprob, whole_sum, ">=", 700)
+
+for (i in 1:10) {
+  this_computer <- rep(0, 10)
+  this_computer[i] <- 1
+  
+  if (i != n){
+    add.constraint(lprob, this_computer, "<=", 700)
+  } else {
+    add.constraint(lprob, this_computer, "=", 0)
+  }
+}
+```
+
+```{r}
+set.objfn(lprob, q_coefs)
+lprob
+```
+
+```{r}
+# Solve 
+status_code <- solve(lprob)
+n_out_of_work_target <- get.objective(lprob)
+n_out_of_work_target
+```
+
+```{r}
+n_out_of_work_varibles <- get.variables(lprob)
+n_out_of_work_varibles
+```
+
+```{r}
+# Sensitive
+original_options <- options(digits = 3, scipen = 30)
+
+n_out_of_work_sensetive <- sensitivity_results <- get.sensitivity.obj(lprob)
+
+for (i in 1:length(sensitivity_results$objfrom)) {
+  cat(paste("x", i, "\t| [", sensitivity_results$objfrom[i], ", ", sensitivity_results$objtill[i], "]\n", sep = ""))
+}
+```
+
+```{r}
+optimum$sens.coef.from
+optimum$sens.coef.to
+```
+
+## Results
+
+### All computers work & we have the сriterion of simultaneous completion of work:
+
+#### time to process =
+
+```{r}
+time_request_target
+```
+
+#### stations load =
+
+```{r}
+time_request_variables
+```
+
+#### sensitive =
+
+```{r}
+time_request_sensetive
+```
+
+### Dismiss time condition:
+
+#### time to process =
+
+```{r}
+non_time_request_target
+```
+
+#### stations load =
+
+```{r}
+non_time_request_varibles
+```
+
+#### sensitive =
+
+```{r}
+non_time_request_sensetive
+```
+
+### Get rid of n'th cluster:
+
+#### time to process =
+
+```{r}
+n_out_of_work_target
+```
+
+#### stations load =
+
+```{r}
+n_out_of_work_varibles
+```
+
+#### sensitive =
+
+```{r}
+n_out_of_work_sensetive
+```
+
+### Complite table
+
+| x\_#experement\_#computer |           target            |               value               |                    from                    |                    till                    |
+|:-----------:|:-----------------------:|:----------:|:----------:|:----------:|
+|           x1_1            |   `r time_request_target`   |   `r time_request_variables[1]`   |   `r time_request_sensetive$objfrom[1]`    |   `r time_request_sensetive$objtill[1]`    |
+|           x1_2            |   `r time_request_target`   |   `r time_request_variables[2]`   |   `r time_request_sensetive$objfrom[2]`    |   `r time_request_sensetive$objtill[2]`    |
+|           x1_3            |   `r time_request_target`   |   `r time_request_variables[3]`   |   `r time_request_sensetive$objfrom[3]`    |   `r time_request_sensetive$objtill[3]`    |
+|           x1_4            |   `r time_request_target`   |   `r time_request_variables[4]`   |   `r time_request_sensetive$objfrom[4]`    |   `r time_request_sensetive$objtill[4]`    |
+|           x1_5            |   `r time_request_target`   |   `r time_request_variables[5]`   |   `r time_request_sensetive$objfrom[5]`    |   `r time_request_sensetive$objtill[5]`    |
+|           x1_6            |   `r time_request_target`   |   `r time_request_variables[6]`   |   `r time_request_sensetive$objfrom[6]`    |   `r time_request_sensetive$objtill[6]`    |
+|           x1_7            |   `r time_request_target`   |   `r time_request_variables[7]`   |   `r time_request_sensetive$objfrom[7]`    |   `r time_request_sensetive$objtill[7]`    |
+|           x1_8            |   `r time_request_target`   |   `r time_request_variables[8]`   |   `r time_request_sensetive$objfrom[8]`    |   `r time_request_sensetive$objtill[8]`    |
+|           x1_9            |   `r time_request_target`   |   `r time_request_variables[9]`   |   `r time_request_sensetive$objfrom[9]`    |   `r time_request_sensetive$objtill[9]`    |
+|           x1_10           |   `r time_request_target`   |  `r time_request_variables[10]`   |   `r time_request_sensetive$objfrom[10]`   |   `r time_request_sensetive$objtill[10]`   |
+|                           |                             |                                   |                                            |                                            |
+|           x2_1            | `r non_time_request_target` | `r non_time_request_varibles[1]`  | `r non_time_request_sensetive$objfrom[1]`  | `r non_time_request_sensetive$objtill[1]`  |
+|           x2_2            | `r non_time_request_target` | `r non_time_request_varibles[2]`  | `r non_time_request_sensetive$objfrom[2]`  | `r non_time_request_sensetive$objtill[2]`  |
+|           x2_3            | `r non_time_request_target` | `r non_time_request_varibles[3]`  | `r non_time_request_sensetive$objfrom[3]`  | `r non_time_request_sensetive$objtill[3]`  |
+|           x2_4            | `r non_time_request_target` | `r non_time_request_varibles[4]`  | `r non_time_request_sensetive$objfrom[4]`  | `r non_time_request_sensetive$objtill[4]`  |
+|           x2_5            | `r non_time_request_target` | `r non_time_request_varibles[5]`  | `r non_time_request_sensetive$objfrom[5]`  | `r non_time_request_sensetive$objtill[5]`  |
+|           x2_6            | `r non_time_request_target` | `r non_time_request_varibles[6]`  | `r non_time_request_sensetive$objfrom[6]`  | `r non_time_request_sensetive$objtill[6]`  |
+|           x2_7            | `r non_time_request_target` | `r non_time_request_varibles[7]`  | `r non_time_request_sensetive$objfrom[7]`  | `r non_time_request_sensetive$objtill[7]`  |
+|           x2_8            | `r non_time_request_target` | `r non_time_request_varibles[8]`  | `r non_time_request_sensetive$objfrom[8]`  | `r non_time_request_sensetive$objtill[8]`  |
+|           x2_9            | `r non_time_request_target` | `r non_time_request_varibles[9]`  | `r non_time_request_sensetive$objfrom[9]`  | `r non_time_request_sensetive$objtill[9]`  |
+|           x2_10           | `r non_time_request_target` | `r non_time_request_varibles[10]` | `r non_time_request_sensetive$objfrom[10]` | `r non_time_request_sensetive$objtill[10]` |
+|                           |                             |                                   |                                            |                                            |
+|           x3_1            |  `r n_out_of_work_target`   |   `r n_out_of_work_varibles[1]`   |   `r n_out_of_work_sensetive$objfrom[1]`   |   `r n_out_of_work_sensetive$objtill[1]`   |
+|           x3_2            |  `r n_out_of_work_target`   |   `r n_out_of_work_varibles[2]`   |   `r n_out_of_work_sensetive$objfrom[2]`   |   `r n_out_of_work_sensetive$objtill[2]`   |
+|           x3_3            |  `r n_out_of_work_target`   |   `r n_out_of_work_varibles[3]`   |   `r n_out_of_work_sensetive$objfrom[3]`   |   `r n_out_of_work_sensetive$objtill[3]`   |
+|           x3_4            |  `r n_out_of_work_target`   |   `r n_out_of_work_varibles[4]`   |   `r n_out_of_work_sensetive$objfrom[4]`   |   `r n_out_of_work_sensetive$objtill[4]`   |
+|           x3_5            |  `r n_out_of_work_target`   |   `r n_out_of_work_varibles[5]`   |   `r n_out_of_work_sensetive$objfrom[5]`   |   `r n_out_of_work_sensetive$objtill[5]`   |
+|           x3_6            |  `r n_out_of_work_target`   |   `r n_out_of_work_varibles[6]`   |   `r n_out_of_work_sensetive$objfrom[6]`   |   `r n_out_of_work_sensetive$objtill[6]`   |
+|           x3_7            |  `r n_out_of_work_target`   |   `r n_out_of_work_varibles[7]`   |   `r n_out_of_work_sensetive$objfrom[7]`   |   `r n_out_of_work_sensetive$objtill[7]`   |
+|           x3_8            |  `r n_out_of_work_target`   |   `r n_out_of_work_varibles[8]`   |   `r n_out_of_work_sensetive$objfrom[8]`   |   `r n_out_of_work_sensetive$objtill[8]`   |
+|           x3_9            |  `r n_out_of_work_target`   |   `r n_out_of_work_varibles[9]`   |   `r n_out_of_work_sensetive$objfrom[9]`   |   `r n_out_of_work_sensetive$objtill[9]`   |
+|           x3_10           |  `r n_out_of_work_target`   |  `r n_out_of_work_varibles[10]`   |  `r n_out_of_work_sensetive$objfrom[10]`   |  `r n_out_of_work_sensetive$objtill[10]`   |
+
+## Вариант 2
+
+$$\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+      x_1+x_2+x_3+x_4\leq400\\
+      x_5+x_6\leq800\\
+      x_7+x_8+x_9+x_{10}\leq600\\
+      \sum_{i=1}^{10} x_i\geq1200\\
+      \forall{i}: 0\leq x_i\leq700
+\end{cases}\,$$
+
+## Вариант 3
+
+$$\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+      x_1+x_2+x_3+x_4\leq400\\
+      x_5+x_6\leq800\\
+      x_7+x_8+x_9+x_{10}\leq600\\
+      \sum_{i=1}^{10} x_i=1200\\
+      10x_1+4x_2+8x_3+6x_4-2x_5-3x_6=0\\
+      x_1+x_2+x_3+x_4+x_5+x_6\geq700\\
+      \forall{i}: 0\leq x_i\leq700
+\end{cases}\,$$
+
+## Вариант 4
+
+$$\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+      x_1+x_2+x_3+x_4\leq400\\
+      x_5+x_6\leq800\\
+      x_7+x_8+x_9+x_{10}\leq600\\
+      \sum_{i=1}^{10} x_i=1200\\
+      10x_1+4x_2+8x_3+6x_4-2x_5-3x_6=0\\
+      10x_1+4x_2+8x_3+6x_4-8x_7-2x_8-6x_9-6x_{10}=0\\
+      x_1+x_2+x_3+x_4+x_5+x_6\geq700\\
+      \forall{i}: 0\leq x_i\leq700
+\end{cases}\,$$
+
+## Вариант 5
+
+$$\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+      x_1+x_2+x_3+x_4\leq400\\
+      x_5+x_6\leq800\\
+      x_7+x_8+x_9+x_{10}\leq600\\
+      \sum_{i=1}^{10} x_i=1200\\
+      \forall{i}: 0\leq x_i\leq700
+\end{cases}\,$$
+
+## Вариант 6
+
+$$\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+      x_1+x_2+x_3+x_4\leq400\\
+      x_5+x_6\geq800\\
+      x_7+x_8+x_9+x_{10}\leq600\\
+      \sum_{i=1}^{10} x_i=1200\\
+      \forall{i}: 0\leq x_i\leq700
+\end{cases}\,$$
+
+## Вариант 7
+
+$$\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+      x_1+x_2+x_3+x_4\leq400\\
+      x_5+x_6\leq800\\
+      x_7+x_8+x_9+x_{10}\geq600\\
+      \sum_{i=1}^{10} x_i=1000\\
+      \forall{i}: 0\leq x_i\leq700
+\end{cases}\,$$
+
+## Вариант 8
+
+$$\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+      x_1+x_2+x_3+x_4\leq400\\
+      x_5+x_6\leq800\\
+      x_7+x_8+x_9+x_{10}\leq600\\
+      \sum_{i=1}^{10} x_i=1000\\
+      10x_1+4x_2+8x_3+6x_4-2x_5-3x_6=0\\
+      x_1+x_2+x_3+x_4+x_5+x_6\geq900\\
+      \forall{i}: 0\leq x_i\leq700
+\end{cases}\,$$
+
+## Вариант 9
+
+$$\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+      x_1+x_2+x_3+x_4\leq400\\
+      x_5+x_6\geq800\\
+      x_7+x_8+x_9+x_{10}\leq600\\
+      \sum_{i=1}^{10} x_i=1000\\
+      \forall{i}: 0\leq x_i\leq700
+\end{cases}\,$$
+
+## Вариант 10
+
+$$\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+      x_1+x_2+x_3+x_4\leq400\\
+      x_5+x_6\geq900\\
+      x_7+x_8+x_9+x_{10}\leq600\\
+      \sum_{i=1}^{10} x_i=1500\\
+      \forall{i}: 0\leq x_i\leq700
+\end{cases}\,$$
+
+# Контрольные вопросы
+
+1.  Что такое стандартная форма модели ЛП?
+2.  Чем отличаются условия допустимости и оптимальности для функций минимизации и максимизации?
+3.  Для чего вводятся остаточные и избыточные переменные?
+4.  Какую информацию можно получить, анализируя значения дополнительных переменных?
+5.  В чём особенность применения M-метода и двухэтапного метода?
+6.  Укажите особые случаи применения симплекс-метода. Чем они вызваны?
+7.  Объясните, из-за чего возникает необходимость использования искусственных переменных при поиске начального базового решения?
