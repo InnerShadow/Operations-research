@@ -1,6 +1,6 @@
 ---
 title: Лабораторная работа 1. Задания
-author: "Masikol"
+author: "Сікаленка Міхаіл, 7ПІ"
 date: "27/02/2024"
 output:
   html_document:
@@ -102,7 +102,6 @@ plot_ly(z = ~z) |> add_surface()
 ```
 
 ```{r}
-
 z <- t(outer(x, y, FUN = F))
 plot_ly(x = ~x, y = ~y, z = ~z, type = "contour")
 ```

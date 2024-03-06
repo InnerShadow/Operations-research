@@ -1789,6 +1789,16 @@ optimum</code></pre>
 </div>
 <div id="other-library-option" class="section level2">
 <h2>Other library option</h2>
+<p><span class="math display">\[\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+      x_1+x_2+x_3+x_4\leq400\\
+      x_5+x_6\leq800\\
+      x_7+x_8+x_9+x_{10}\leq600\\
+      \sum_{i=1}^{10} x_i=1000\\
+      10x_1+4x_2+8x_3+6x_4-2x_5-3x_6=0\\
+      x_1+x_2+x_3+x_4+x_7+x_8+x_9+x_{10}\geq700\\
+      \forall{i}: 0\leq x_i\leq700
+\end{cases}\,\]</span></p>
 <pre class="r"><code>library(lpSolveAPI)
 
 # Create function with 10 features &amp; 0 limitations
@@ -1897,6 +1907,15 @@ for (i in 1:length(sensitivity_results$objfrom)) {
 <div id="updated-task-dismiss-сriterion-of-simultaneous-completion-of-work" class="section level2">
 <h2>Updated task: dismiss сriterion of simultaneous completion of
 work</h2>
+<p><span class="math display">\[\begin{cases}
+      \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
+      x_1+x_2+x_3+x_4\leq400\\
+      x_5+x_6\leq800\\
+      x_7+x_8+x_9+x_{10}\leq600\\
+      \sum_{i=1}^{10} x_i=1000\\
+      x_1+x_2+x_3+x_4+x_7+x_8+x_9+x_{10}\geq700\\
+      \forall{i}: 0\leq x_i\leq700
+\end{cases}\,\]</span></p>
 <pre class="r"><code># Dismiss сriterion of simultaneous completion of work
 library(lpSolveAPI)
 
