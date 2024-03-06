@@ -33,8 +33,6 @@ The R script for the solution is available [here](/Lab1/lab1_3.R).
 
 ## Task 4
 
-Find the partial derivatives of the function $F=
-
-xy$ and the point where they are equal to 0. Plot the three-dimensional and contour graph. Identify any special points. $\frac{dF}{dx}=y\\$, $\frac{dF}{dy}=x\\$.
+Find the partial derivatives of the function $F=xy$ and the point where they are equal to 0. Plot the three-dimensional and contour graph. Identify any special points. $\frac{dF}{dx}=y\\$, $\frac{dF}{dy}=x\\$.
 
 The R script for the solution is available [here](/Lab1/lab1_4.R).
