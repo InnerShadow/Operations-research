@@ -11,7 +11,7 @@
 
 ## Full Report
 
-The .rmd file is available [here](/Lab1/Lab1Task.Rmd), and the compiled html report is accessible [here](/Lab1/Lab1Task.html).
+The .rmd file is available [here](/Lab1/Lab1Task.Rmd).
 
 ## Task 1
 

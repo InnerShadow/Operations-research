@@ -35,4 +35,4 @@ $$\begin{cases}
 2. Subsequently, the problem was solved using lpSolveAPI without the criterion of simultaneous completion of all clusters in time.
 3. The same problem was solved under the condition that one of the clusters failed.
 
-The complete notebook with the solution is presented in .rmd format [here](/Lab2/Updated_Lab2Task.Rmd), the clean R script is available [here](/Lab2/La2_Rscript.R), and the compiled html report is accessible [here](/Lab2/Updated_Lab2Task.html).
+The complete notebook with the solution is presented in .rmd format [here](/Lab2/Updated_Lab2Task.Rmd), the clean R script is available [here](/Lab2/La2_Rscript.R).

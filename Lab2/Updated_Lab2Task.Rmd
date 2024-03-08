@@ -154,7 +154,6 @@ $$\begin{cases}
       \forall{i}: 0\leq x_i\leq700
 \end{cases}\,$$
 
-
 ```{r}
 library(lpSolveAPI)
 
@@ -455,7 +454,7 @@ n_out_of_work_sensetive
 ### Complite table
 
 | x\_#experement\_#computer |           target            |               value               |                    from                    |                    till                    |
-|:-------------:|:-------------:|:-------------:|:-------------:|:-------------:|
+|:-------------------------:|:---------------------------:|:---------------------------------:|:------------------------------------------:|:------------------------------------------:|
 |           x1_1            |   `r time_request_target`   |   `r time_request_variables[1]`   |   `r time_request_sensetive$objfrom[1]`    |   `r time_request_sensetive$objtill[1]`    |
 |           x1_2            |   `r time_request_target`   |   `r time_request_variables[2]`   |   `r time_request_sensetive$objfrom[2]`    |   `r time_request_sensetive$objtill[2]`    |
 |           x1_3            |   `r time_request_target`   |   `r time_request_variables[3]`   |   `r time_request_sensetive$objfrom[3]`    |   `r time_request_sensetive$objtill[3]`    |
