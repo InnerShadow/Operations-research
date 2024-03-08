@@ -15,7 +15,7 @@ The .rmd file is available [here](/Lab1/Lab1Task.Rmd).
 
 ## Task 1
 
-Plot the function and its derivatives $F=(x-5)^2+6x$. Find the minimum of the function. $\frac{dF}{dx}=2(x-5)+6$.
+Plot the function and its derivatives $F=(x-5)^2+6x$. Find the minimum of the function.
 
 The R script for the solution is available [here](/Lab1/lab1_1.R).
 
@@ -33,6 +33,6 @@ The R script for the solution is available [here](/Lab1/lab1_3.R).
 
 ## Task 4
 
-Find the partial derivatives of the function $F=xy$ and the point where they are equal to 0. Plot the three-dimensional and contour graph. Identify any special points. $\frac{dF}{dx}=y\\$, $\frac{dF}{dy}=x\\$.
+Find the partial derivatives of the function $F=xy$ and the point where they are equal to 0. Plot the three-dimensional and contour graph. Identify any special points.
 
 The R script for the solution is available [here](/Lab1/lab1_4.R).
