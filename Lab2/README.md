@@ -18,7 +18,7 @@ $$\min{F(\vec{x})}=\sum_{i=1}^{N} q_ix_i$$
 
 subject to the condition that the actual volume of data processed by the workstations equals the required: $\sum_{i=1}^{N} x_i=X$, and the load on each station is within the permissible range: $x_i\geq0,x_i\leq P_i, i=1,2,...,N$, and the total volume of data processed by the cluster does not exceed the specified value: $\sum_{i=1}^{m_1} x_i\leq R_1, \sum_{i=m_1+1}^{m_2} x_i\leq R_2, \sum_{i=m_{M-1}+1}^{N} x_i\leq R_M$, and the processing times are equal on all clusters: $\sum_{i=1}^{m_1} x_i =\sum_{i=m_1+1}^{m_2} x_i, \sum_{i=m_2+1}^{m_3} x_i =\sum_{i=1}^{m_1} x_i, \sum_{i=m_{M-1}+1}^{N} x_i =\sum_{i=1}^{m_1} x_i$.
 
-Optimization problem for my variant:
+Optimization problem for my option:
 
 $$\begin{cases}
       \min{F(x)=10x_1+4x_2+8x_3+6x_4+2x_5+3x_6+8x_7+2x_8+6x_9+6x_{10}}\\
