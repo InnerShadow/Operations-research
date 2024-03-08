@@ -137,9 +137,13 @@ optimum <- lp(
 optimum
 ```
 
+Find the solition in 2266.667 time units of measurement.
+
 ```{r}
 optimum$solution
 ```
+
+Show what computers are working during this. See that 2'nd station process 133.3333 units of data, 5'th - 266.6667,  8'th - 600.0000. We get the solution when only the faster's computers in each cluster works.
 
 ## Other library option
 
@@ -194,10 +198,14 @@ time_request_target <- get.objective(lprob)
 time_request_target
 ```
 
+Get the same result, but using other library, that means that they are interchangeable, but for me lpSolveAPI seems more intuitive & and it's easyer to track errors using lpSolveAPI. Also it provide functions to count sensetive.
+
 ```{r}
 time_request_variables <- get.variables(lprob)
 time_request_variables
 ```
+
+Same computers process same data.
 
 ```{r}
 # Sensitive
@@ -210,9 +218,23 @@ for (i in 1:length(sensitivity_results$objfrom)) {
 }
 ```
 
+Get sensetive to each station. See that:
+1. For variable x1, the objective function is insensitive over a wide range [6, infinity), indicating that its value has little impact on the optimization outcome.
+2. For variable x2, its optimal value lies in the range [2, 5], suggesting sensitivity within this interval for an optimal solution.
+3. Variable x3's impact on the objective function is relatively insensitive, ranging from approximately [5.33, infinity).
+4. Variable x4's impact is also insensitive, ranging from approximately [4.67, infinity).
+5. For variable x5, the optimal value falls within the range [1, 3.14], indicating sensitivity within this interval.
+6. Variable x6's optimal value is insensitive over a wide range [1.67, infinity).
+7. Variable x7's impact on the objective function is insensitive over the interval [2, infinity).
+8. Variable x8's optimal value is highly sensitive, with a narrow range of [-infinity, 2.67].
+9. Variable x9's impact is insensitive over a wide range [2, infinity).
+10. Variable x10's impact is insensitive over a wide range [2, infinity).
+
 ```{r}
 get.sensitivity.rhs(lprob)
 ```
+
+The duals values shows us that only 3'th limitation $x_7+x_8+x_9+x_{10}\leq600$ good, that means that 3'th limitation right part increasing provides better final result. Other limitations do nothing or make thing worsted.
 
 ```{r}
 optimum$sens.coef.from
@@ -278,6 +300,8 @@ non_time_request_varibles <- get.variables(lprob)
 non_time_request_varibles
 ```
 
+If get rid of time criterium we get better results, where 1'st cluster do not works at all & 2 the fastest computers take all work themselves.  
+
 ```{r}
 # Sensitive
 original_options <- options(digits = 3, scipen = 30)
@@ -293,6 +317,12 @@ for (i in 1:length(sensitivity_results$objfrom)) {
 optimum$sens.coef.from
 optimum$sens.coef.to
 ```
+
+```{r}
+get.sensitivity.rhs(lprob)
+```
+
+Now we cannot make better target function, so duals analysis shows that there is no limitation that can reduce target function. So 2000 it the best result having this computer hardware.
 
 ## If one of computers out of work task
 
@@ -389,7 +419,28 @@ optimum$sens.coef.from
 optimum$sens.coef.to
 ```
 
+```{r}
+get.sensitivity.rhs(lprob)
+```
+
+So in case that n'th (5'th in this case, but we can choose n between 1 & 10 cause code provides dynamic recount in case of what ever computer do not works) and see that 3'th limitation can helps us to get better resualt (3'th cluster limitation).
+
 ## Results
+
+### Make resualts more readable:
+
+```{r}
+
+time_request_sensetive$objfrom[time_request_sensetive$objfrom < -100] <- -Inf
+time_request_sensetive$objtill[time_request_sensetive$objtill > 100] <- Inf
+
+non_time_request_sensetive$objfrom[non_time_request_sensetive$objfrom < -100] <- -Inf
+non_time_request_sensetive$objtill[non_time_request_sensetive$objtill > 100] <- Inf
+
+n_out_of_work_sensetive$objfrom[n_out_of_work_sensetive$objfrom < -100] <- -Inf
+n_out_of_work_sensetive$objtill[n_out_of_work_sensetive$objtill > 100] <- Inf
+
+```
 
 ### All computers work & we have the сriterion of simultaneous completion of work:
 
@@ -411,7 +462,7 @@ time_request_variables
 time_request_sensetive
 ```
 
-### Dismiss time condition:
+### Dismiss the time condition:
 
 #### time to process =
 
@@ -454,7 +505,7 @@ n_out_of_work_sensetive
 ### Complite table
 
 | x\_#experement\_#computer |           target            |               value               |                    from                    |                    till                    |
-|:-------------------------:|:---------------------------:|:---------------------------------:|:------------------------------------------:|:------------------------------------------:|
+|:-------------:|:-------------:|:-------------:|:-------------:|:-------------:|
 |           x1_1            |   `r time_request_target`   |   `r time_request_variables[1]`   |   `r time_request_sensetive$objfrom[1]`    |   `r time_request_sensetive$objtill[1]`    |
 |           x1_2            |   `r time_request_target`   |   `r time_request_variables[2]`   |   `r time_request_sensetive$objfrom[2]`    |   `r time_request_sensetive$objtill[2]`    |
 |           x1_3            |   `r time_request_target`   |   `r time_request_variables[3]`   |   `r time_request_sensetive$objfrom[3]`    |   `r time_request_sensetive$objtill[3]`    |
@@ -487,6 +538,12 @@ n_out_of_work_sensetive
 |           x3_8            |  `r n_out_of_work_target`   |   `r n_out_of_work_varibles[8]`   |   `r n_out_of_work_sensetive$objfrom[8]`   |   `r n_out_of_work_sensetive$objtill[8]`   |
 |           x3_9            |  `r n_out_of_work_target`   |   `r n_out_of_work_varibles[9]`   |   `r n_out_of_work_sensetive$objfrom[9]`   |   `r n_out_of_work_sensetive$objtill[9]`   |
 |           x3_10           |  `r n_out_of_work_target`   |  `r n_out_of_work_varibles[10]`   |  `r n_out_of_work_sensetive$objfrom[10]`   |  `r n_out_of_work_sensetive$objtill[10]`   |
+
+Experiment 1: For variable x1, the target value is 2266.667, and it is most sensitive in the absence of constraints, cause we have each cluster work. So the 2nd, 5'th & 8'th computer are working and they have till limitation, other computers do not work and their parameters analise do not important.
+
+Experiment 2: Variable x2, with a target value of 2000, exhibits sensitivity in its optimization, particularly when the computer's availability is constrained, 5'th and 8'th computer make all work, so other computer's sensetive do not important.
+
+Experiment 3: In the case of x3 with a target value of 2400, we turn of 5'th computer, the optimization is most sensitive on 6'th and 8'th computer that make all work.a
 
 # Контрольные вопросы
 
