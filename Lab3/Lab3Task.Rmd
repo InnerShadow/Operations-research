@@ -200,26 +200,6 @@ time_delays <- sapply(non_loop_paths, calculate_time_delay, graph = g)
 ```
 
 ```{r}
-# time_delays <- numeric(length(non_loop_paths))
-# 
-# for (i in seq_along(non_loop_paths)) {
-#   path <- non_loop_paths[[i]]
-#   edge_weights <- sapply(seq_along(path)[-1], function(j) {
-#     edge <- get.edge.ids(g, c(path[j - 1], path[j]))
-#     if (length(edge) > 0) {
-#       return(E(g)$weight[edge])
-#     } else {
-#       return(0)
-#     }
-#   })
-#   time_delay <- sum(edge_weights)
-#   time_delays[i] <- time_delay
-# }
-# 
-# time_delays
-```
-
-```{r}
 N <- length(non_loop_paths)
 Fun <- c(rep(0, p + q), c(time_delays))
 A <- c(rep(0, p + q), rep(1, N))
