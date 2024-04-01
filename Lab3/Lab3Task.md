@@ -55,7 +55,7 @@ editor_options:
 
 library(digest)
 library(extraDistr)
-set.seed(digest2int('Сиколенко Михаил Александрович'))
+set.seed(digest2int('Машкарёва Наталья Дмитриевна'))
 ```
 
 Переменная *simple* отвечает за выбор варианта сложности.
@@ -75,7 +75,7 @@ p
 ```
 
 ```
-## [1] 10
+## [1] 8
 ```
 
 Число резервных маршрутов $r$
@@ -113,7 +113,7 @@ q
 ```
 
 ```
-## [1] 10
+## [1] 9
 ```
 
 Задержка линии связи $W$
@@ -146,8 +146,8 @@ v
 ```
 
 ```
-## + 2/10 vertices, from 2152b8a:
-## [1] 2 4
+## + 2/8 vertices, from a0d4a63:
+## [1] 5 7
 ```
 
 ```r
@@ -161,35 +161,32 @@ l <- v[2]
 
 Общая формулировка задачи выглядит следующим образом **(подстановка реализуется при сохранении, например html)**:
 
-Рассмотрим телекоммуникационную сеть, состоящую из $p=10$ узлов-маршрутизаторов $R$ и $q=10$ соединяющих их линий связи $P$.
+Рассмотрим телекоммуникационную сеть, состоящую из $p=8$ узлов-маршрутизаторов $R$ и $q=9$ соединяющих их линий связи $P$.
 Сеть определяется граформ, заданным списком смежности: $$
 \newcommand\ue{\mathrel{\bullet\mkern-3mu{-}\mkern-3mu\bullet}}
-\{1\ue4,3\ue5,5\ue7,6\ue7,1\ue8,6\ue8,5\ue9,2\ue10,8\ue10,9\ue10\}
-$$ Каждая линия связи оценивается временем задержки сигнала измеряемым в миллисекундах: $$W=\{38,52,8,38,90,60,25,82,78,25\}$$ Маршрутизаторы, имеют горячее резервирование кратности: $$SR=\{2\}$$ Линии связи имеют дублирование кратности: $$SP=\{2\}$$ Требуется найти $r=2$ зарезервированных канала от узла $k=2$ к узлу $l=4$, не задействующих совместно незадублированные маршрутизаторы и линии связи, обеспечивающих суммарно минимальное время задержки.
+\{1\ue3,2\ue3,1\ue4,3\ue4,1\ue5,2\ue6,2\ue7,1\ue8,5\ue8\}
+$$ Каждая линия связи оценивается временем задержки сигнала измеряемым в миллисекундах: $$W=\{27,80,89,87,84,26,54,80,79\}$$ Маршрутизаторы, имеют горячее резервирование кратности: $$SR=\{2\}$$ Линии связи имеют дублирование кратности: $$SP=\{2\}$$ Требуется найти $r=2$ зарезервированных канала от узла $k=5$ к узлу $l=7$, не задействующих совместно незадублированные маршрутизаторы и линии связи, обеспечивающих суммарно минимальное время задержки.
 
 ![](Lab3Task_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
 
 
-
 ```r
 edge_list <- as_edgelist(g)
-print(edge_list)
+edge_list
 ```
 
 ```
 ##       [,1] [,2]
-##  [1,]    1    4
-##  [2,]    3    5
-##  [3,]    5    7
-##  [4,]    6    7
-##  [5,]    1    8
-##  [6,]    6    8
-##  [7,]    5    9
-##  [8,]    2   10
-##  [9,]    8   10
-## [10,]    9   10
+##  [1,]    1    3
+##  [2,]    2    3
+##  [3,]    1    4
+##  [4,]    3    4
+##  [5,]    1    5
+##  [6,]    2    6
+##  [7,]    2    7
+##  [8,]    1    8
+##  [9,]    5    8
 ```
-
 
 
 ```r
@@ -198,53 +195,179 @@ W
 ```
 
 ```
-##  [1] 38 52  8 38 90 60 25 82 78 25
+## [1] 27 80 89 87 84 26 54 80 79
 ```
-
 
 
 ```r
 filter_loops <- function(paths) {
-  filtered_paths <- lapply(paths, function(path) {
-    if (!anyDuplicated(path)) {
-      return(path)
-    }
-    return(NULL)
-  })
-  return(filtered_paths[!sapply(filtered_paths, is.null)])
+    filtered_paths <- lapply(paths, function(path) {
+        if (!anyDuplicated(path)) {
+            return(path)
+        }
+        return(NULL)
+    })
+    return(filtered_paths[!sapply(filtered_paths, is.null)])
 }
 
 find_non_loop_paths <- function(g, k, l) {
-  all_paths <- all_simple_paths(g, from = k, to = l)
-  non_loop_paths <- filter_loops(all_paths)
-  return(non_loop_paths)
+    all_paths <- all_simple_paths(g, from = k, to = l)
+    non_loop_paths <- filter_loops(all_paths)
+    return(non_loop_paths)
 }
 ```
-
 
 
 ```r
 non_loop_paths <- find_non_loop_paths(g, k, l)
-print(non_loop_paths)
+non_loop_paths
 ```
 
 ```
 ## [[1]]
-## + 5/10 vertices, from 2152b8a:
-## [1]  2 10  8  1  4
+## + 5/8 vertices, from a0d4a63:
+## [1] 5 1 3 2 7
 ## 
 ## [[2]]
-## + 9/10 vertices, from 2152b8a:
-## [1]  2 10  9  5  7  6  8  1  4
+## + 6/8 vertices, from a0d4a63:
+## [1] 5 1 4 3 2 7
+## 
+## [[3]]
+## + 6/8 vertices, from a0d4a63:
+## [1] 5 8 1 3 2 7
+## 
+## [[4]]
+## + 7/8 vertices, from a0d4a63:
+## [1] 5 8 1 4 3 2 7
 ```
 
 
+```r
+calculate_time_delay <- function(path, graph) {
+    edge_indices <- t(combn(path, 2))
+    edge_weights <- sapply(1:(nrow(edge_indices)), function(j) {
+        edge <- get.edge.ids(graph, edge_indices[j, ])
+        if (length(edge) > 0) {
+            return(E(graph)$weight[edge])
+        } else {
+            return(0)
+        }
+    })
+    return(sum(unlist(edge_weights)))
+}
+
+time_delays <- sapply(non_loop_paths, calculate_time_delay, graph = g)
+time_delays
+```
+
+```
+## [1] 245 421 404 580
+```
 
 
+```r
+# time_delays <- numeric(length(non_loop_paths))
+# 
+# for (i in seq_along(non_loop_paths)) {
+#   path <- non_loop_paths[[i]]
+#   edge_weights <- sapply(seq_along(path)[-1], function(j) {
+#     edge <- get.edge.ids(g, c(path[j - 1], path[j]))
+#     if (length(edge) > 0) {
+#       return(E(g)$weight[edge])
+#     } else {
+#       return(0)
+#     }
+#   })
+#   time_delay <- sum(edge_weights)
+#   time_delays[i] <- time_delay
+# }
+# 
+# print(time_delays)
+```
 
 
+```r
+N <- length(non_loop_paths)
+Fun <- c(rep(0, p), c(time_delays))
+A <- c(rep(0, p), rep(1, N))
+B <- c(r)
+```
 
 
+```r
+A
+```
+
+```
+##  [1] 0 0 0 0 0 0 0 0 1 1 1 1
+```
+
+
+```r
+n_size <- p + N
+
+constr_row <- function(...) {
+    tmp <- rep(0, n_size)
+    tmp[c(...)] <- 1
+    return(tmp)
+}
+```
+
+
+```r
+for (i in 1 : length(non_loop_paths)){
+    A <- rbind(A, constr_row(non_loop_paths[[i]]))
+    A[i + 1, p + i] <- 1
+    B <- c(B, V(g)$standby[1])
+}
+A
+```
+
+```
+##   [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10] [,11] [,12]
+## A    0    0    0    0    0    0    0    0    1     1     1     1
+##      1    1    1    0    1    0    1    0    1     0     0     0
+##      1    1    1    1    1    0    1    0    0     1     0     0
+##      1    1    1    0    1    0    1    1    0     0     1     0
+##      1    1    1    1    1    0    1    1    0     0     0     1
+```
+
+
+```r
+CD <- c("=", rep("<=", N))
+CD
+```
+
+```
+## [1] "="  "<=" "<=" "<=" "<="
+```
+
+
+```r
+library(lpSolve)
+
+optimum <- lp(
+  direction = "min",
+  objective.in = Fun,
+  const.mat = A,
+  const.dir = CD,
+  const.rhs = B,
+  all.bin = TRUE
+)
+optimum
+```
+
+```
+## Success: the objective function is 649
+```
+
+```r
+optimum$solution
+```
+
+```
+##  [1] 0 0 0 0 0 0 0 0 1 0 1 0
+```
 
 # Оценивание
 
