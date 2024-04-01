@@ -55,6 +55,9 @@ editor_options:
 
 library(digest)
 library(extraDistr)
+library(lpSolve)
+library(igraph)
+
 set.seed(digest2int('Сиколенко Михаил Александрович'))
 ```
 
@@ -68,7 +71,7 @@ simple <- F
 Число маршрутизаторов $p$:
 
 ```{r}
-p <- ifelse(simple, rdunif(1,6,10), rdunif(1,25,50))
+p <- ifelse(simple, rdunif(1,6,10), rdunif(1,10,34))
 p
 ```
 
@@ -82,10 +85,7 @@ r
 Граф маршрутизации
 
 ```{r message=FALSE}
-library(igraph)
-
-repeat
-{
+repeat {
 g <<- sample_gnp(p, ifelse(simple,0.2,0.05))
 if(is_connected(g))
   break
@@ -192,7 +192,9 @@ calculate_time_delay <- function(path, graph) {
     })
     return(sum(unlist(edge_weights)))
 }
+```
 
+```{r}
 time_delays <- sapply(non_loop_paths, calculate_time_delay, graph = g)
 # time_delays
 ```
@@ -214,7 +216,7 @@ time_delays <- sapply(non_loop_paths, calculate_time_delay, graph = g)
 #   time_delays[i] <- time_delay
 # }
 # 
-# print(time_delays)
+# time_delays
 ```
 
 ```{r}
@@ -272,8 +274,6 @@ CD
 
 
 ```{r}
-library(lpSolve)
-
 optimum <- lp(
   direction = "min",
   objective.in = Fun,
@@ -295,6 +295,35 @@ for(i in routes_id){
     cat("\n")
 }
 
+```
+
+```{r}
+plot_graph_with_routes <- function(graph, selected_routes, special_nodes) {
+    V(graph)$color <- "orange"
+    V(graph)$color[special_nodes] <- "black"
+    E(graph)$color <- "black"
+    edge_list <- c()
+    for (j in 1:(length(selected_routes[[1]]) - 1)) {
+        vertex1 <- selected_routes[[1]][j]
+        vertex2 <- selected_routes[[1]][j + 1]
+        edge <- get.edge.ids(graph, c(vertex1, vertex2))
+        edge_list <- c(edge_list, edge)
+        intermediate_vertices <- selected_routes[[1]][-c(1, length(selected_routes[[1]]))]
+        V(graph)$color[intermediate_vertices] <- "green"
+    }
+    E(graph)$color[edge_list] <- "red"
+    plot(graph, layout = layout.circle, edge.label = E(graph)$weight)
+}
+
+
+```
+
+```{r}
+for (i in routes_id) {
+    plot_graph_with_routes(g, list(non_loop_paths[[i]]), v)
+    title <- paste("Route", i, "cost -", time_delays[i])
+    title(main = title)
+}
 ```
 
 
