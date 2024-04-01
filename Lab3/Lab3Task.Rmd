@@ -55,13 +55,13 @@ editor_options:
 
 library(digest)
 library(extraDistr)
-set.seed(digest2int('Машкарёва Наталья Дмитриевна'))
+set.seed(digest2int('Сиколенко Михаил Александрович'))
 ```
 
 Переменная *simple* отвечает за выбор варианта сложности.
 
 ```{r}
-simple <- T
+simple <- F
 ```
 
 Далее на основании вашего ФИО и варианта сложности генерируются основные параметры задачи.
@@ -148,12 +148,12 @@ plot(g, layout = layout.circle, edge.label = E(g)$weight)
 
 ```{r}
 edge_list <- as_edgelist(g)
-edge_list
+length(edge_list)
 ```
 
 ```{r}
 W <- E(g)$weight
-W
+length(W)
 ```
 
 ```{r}
@@ -176,7 +176,7 @@ find_non_loop_paths <- function(g, k, l) {
 
 ```{r}
 non_loop_paths <- find_non_loop_paths(g, k, l)
-non_loop_paths
+length(non_loop_paths)
 ```
 
 ```{r}
@@ -194,7 +194,7 @@ calculate_time_delay <- function(path, graph) {
 }
 
 time_delays <- sapply(non_loop_paths, calculate_time_delay, graph = g)
-time_delays
+# time_delays
 ```
 
 ```{r}
@@ -219,8 +219,8 @@ time_delays
 
 ```{r}
 N <- length(non_loop_paths)
-Fun <- c(rep(0, p), c(time_delays))
-A <- c(rep(0, p), rep(1, N))
+Fun <- c(rep(0, p + q), c(time_delays))
+A <- c(rep(0, p + q), rep(1, N))
 B <- c(r)
 ```
 
@@ -229,7 +229,7 @@ A
 ```
 
 ```{r}
-n_size <- p + N
+n_size <- p + q + N
 
 constr_row <- function(...) {
     tmp <- rep(0, n_size)
@@ -239,18 +239,37 @@ constr_row <- function(...) {
 ```
 
 ```{r}
+
+limitation_id <- 2
+
 for (i in 1 : length(non_loop_paths)){
     A <- rbind(A, constr_row(non_loop_paths[[i]]))
-    A[i + 1, p + i] <- 1
+    A[limitation_id, p + q + i] <- 1
+    limitation_id <- limitation_id + 1
     B <- c(B, V(g)$standby[1])
+    edge_list <- c()
+    for(j in 1 : length(non_loop_paths[[i]]) - 1){
+        if(j == length(non_loop_paths[[i]]) - 1){
+            break
+        }
+        vertex1 <- non_loop_paths[[i]][j + 1]
+        vertex2 <- non_loop_paths[[i]][j + 2]
+        edge <- get.edge.ids(g, c(vertex1, vertex2))
+        edge_list <- c(edge_list, edge)
+    }
+    A <- rbind(A, constr_row(edge_list + p))
+    A[limitation_id, p + q + i] <- 1
+    limitation_id <- limitation_id + 1
+    B <- c(B, E(g)$standby[1])
 }
-A
+# A
 ```
 
 ```{r}
-CD <- c("=", rep("<=", N))
+CD <- c("=", rep("<=", nrow(A) - 1))
 CD
 ```
+
 
 ```{r}
 library(lpSolve)
@@ -266,6 +285,18 @@ optimum <- lp(
 optimum
 optimum$solution
 ```
+
+```{r}
+routes_id <- which(optimum$solution == 1) - p - q
+routes_id
+
+for(i in routes_id){
+    cat(non_loop_paths[[i]])
+    cat("\n")
+}
+
+```
+
 
 # Оценивание
 
