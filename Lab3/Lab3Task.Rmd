@@ -1,7 +1,7 @@
 ---
 title: Лабораторная работа 3. Задания
-author: "Автор"
-date: "10/02/2024"
+author: "Сікаленка Міхаіл Аляксандравіч"
+date: "01/04/2024"
 output:
   html_document:
     df_print: paged
