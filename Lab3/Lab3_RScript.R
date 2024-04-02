@@ -201,3 +201,4 @@ for (i in routes_id) {
     title <- paste("Route", i, "cost -", time_delays[i])
     title(main = title)
 }
+
