@@ -26,7 +26,7 @@ r
 
 # generate graph 
 repeat {
-g <<- sample_gnp(p, ifelse(simple,0.2,0.05))
+g <<- sample_gnp(p, ifelse(simple, 0.2, 0.05))
 if(is_connected(g))
   break
 }
@@ -42,11 +42,11 @@ E(g)$weight <- rdunif(q, 1, 100)
 
 
 # Get Router redundancy
-V(g)$standby <- if(simple) rep(2,p) else rdunif(p,r,5)
+V(g)$standby <- if(simple) rep(2, p) else rdunif(p, r, 5)
 
 
 # Get reservation of communication lines
-E(g)$standby <- if(simple) rep(2,q) else rdunif(q, r, 5)
+E(g)$standby <- if(simple) rep(2, q) else rdunif(q, r, 5)
 
 
 # Get vertexes that we need to connect
