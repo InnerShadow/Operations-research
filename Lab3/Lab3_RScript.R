@@ -65,15 +65,8 @@ latex_adj_list <- \(g) g |> as_edgelist() |> apply(1, \(edg) edg |> paste(collap
 plot(g, layout = layout.circle, edge.label = E(g)$weight)
 
 
-# Find non-lops paths 
-find_non_loop_paths <- function(g, k, l) {
-    all_paths <- all_simple_paths(g, from = k, to = l) # Find Simple paths, that means non-loops either 
-    return(all_paths)
-}
-
-
-# Grab this paths 
-non_loop_paths <- find_non_loop_paths(g, k, l)
+# Grab all simple paths, use igraph :P
+non_loop_paths <- all_simple_paths(g, from = k, to = l)
 length(non_loop_paths)
 
 
