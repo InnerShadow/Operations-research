@@ -1,6 +1,6 @@
 # Lab 3
 
-[**Code**](/Lab3/Lab3_RScript.R)
+## [**Code**](/Lab3/Lab3_RScript.R)
 
 ## Task
 Let's consider a telecommunication network consisting of *p* router nodes *R* and *q* connecting communication lines *P*. Each communication line is characterized by signal delay time measured in milliseconds: 
