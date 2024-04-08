@@ -52,7 +52,6 @@ editor_options:
 ```{r message=FALSE}
 # Import list & set seed
 # install.packages('extraDistr')
-
 library(digest)
 library(extraDistr)
 library(lpSolve)
@@ -242,7 +241,6 @@ CD <- c("=", rep("<=", nrow(A) - 1))
 CD
 ```
 
-
 ```{r}
 # Solve this task using lpSolve
 optimum <- lp(
@@ -308,6 +306,7 @@ for (i in routes_id) {
     title(main = title)
 }
 ```
+
 # Оценивание
 
 4-6 Поиск маршрутов вручную, задание ограничений вручную, простой вариант.
