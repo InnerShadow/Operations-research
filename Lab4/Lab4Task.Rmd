@@ -1,0 +1,296 @@
+---
+title: "Лабораторная работа 4. Задания"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r include=FALSE, message=FALSE}
+library(mathml)
+library(extraDistr)
+library(digest)
+library(extraDistr)
+base_seed <- digest2int('Афоненко Анатолий Александрович')
+listN <- function(...){
+    anonList <- list(...)
+    names(anonList) <- as.character(substitute(list(...)))[-1]
+    anonList
+}
+```
+
+# Процедура анализа
+
+Для всех методов требуемых в условии
+
+1. Найти минимум функции простым вызовом метода.
+2. С определить колличество вычислений функции.
+3. С помощью функций trace_\* найти путь поиска решения
+4. Построить анимированный график поиска решения
+5. Построить график поиска решения с точками, в которых была вычислена функция
+6. Построить график поиска решения с градиентом.
+
+Собрать итоговую таблицу (data.frame), в которой строки соответствуют методам, а столбцы (значение функции, значение переменных, колличество вызовов функции)
+
+# Задание 1. Главное не поскользнуться
+
+```{r include=FALSE}
+task1_gen <- function()
+{
+  set.seed(base_seed)
+  la <- rdunif(1, 7, 12) |> as.integer()
+  ca <- rdunif(1, 7, 12) |> as.integer()
+  a <- rdunif(1, 1, 3) |> as.integer()
+  b <- rdunif(1, 1, 5) |> as.integer()
+  o <- rdunif(1, 1, 4) |> as.integer()
+  expr <-
+    substitute(la * frac(1L, 1L + exp(-x)) + ca * cos(o*x) + a * x ^ 2L - b * x)
+  f <- \(x) eval(expr)
+  listN(f, expr)
+}
+task1 <- task1_gen()
+```
+
+`r mathml(task1$expr)`
+
+1. Найти минимум функции
+2. Построить график, выделить точку минимума
+
+# Задание 2. Горбы и ямы
+
+```{r include=FALSE}
+
+task2_gen <- function()
+{
+  set.seed(base_seed+2)
+  a <- rdunif(1, 5, 10) |> as.integer()
+  c <- rdunif(1, 5, 10) |> as.integer()
+  b <- (sqrt(a*c) - 1) |> ceiling() |> as.integer()
+  
+  ae1 <- rdunif(1, 5, 10) |> as.integer()
+  ae2 <- rdunif(1, 5, 10) |> as.integer()
+  ae3 <- rdunif(1, 5, 10) |> as.integer()
+  x01 <- rdunif(1, -3, 3) |> as.integer()
+  x02 <- rdunif(1, -3, 3) |> as.integer()
+  x03 <- rdunif(1, -3, 3) |> as.integer()
+  y01 <- rdunif(1, -3, 3) |> as.integer()
+  y02 <- rdunif(1, -3, 3) |> as.integer()
+  y03 <- rdunif(1, -3, 3) |> as.integer()
+  sx1 <- rdunif(1, 1, 5) |> as.integer()
+  sx2 <- rdunif(1, 1, 5) |> as.integer()
+  sx3 <- rdunif(1, 1, 5) |> as.integer()
+  sy1 <- rdunif(1, 1, 5) |> as.integer()
+  sy2 <- rdunif(1, 1, 5) |> as.integer()
+  sy3 <- rdunif(1, 1, 5) |> as.integer()
+  
+  expr <- substitute(
+    a * x ^ 2L + 2L * b * x * y + c * y ^ 2L + ae1 * exp(-(frac((x - x01) ^ 2L,sx1) + frac((y - y01) ^ 2L , sy1))) + ae2 * exp(-(frac((x - x02) ^ 2L,sx2) + frac((y - sy2) ^ 2L , sy2))) + ae3 * exp(-(frac((x - x03) ^ 2L , sx3) + frac((y - y03) ^ 2L , sy3))))
+  
+  f <- \(par) eval(expr, list(x = par[1], y = par[2]))
+  listN(f, expr)
+}
+task2 <- task2_gen()
+```
+
+Найти безусловный минимум функции двух переменных.
+
+`r mathml(task2$expr)`
+
+С помощью методов: Nelder-Mead, PRAXIS, BFGS, CG.
+
+(Для градиентных методов выразить градиент самостоятельно)
+
+Вызвать функцию можно через объект 
+```{r}
+task2$f(c(1,2))
+```
+Провести анализ
+
+# задание 3. Окружен, но не сломлен
+
+Найти условный минимум функции двух переменных, с ограничениями.
+
+```{r include=FALSE}
+
+task3_linear <- function()
+{
+  set.seed(base_seed+3)
+  a <- rdunif(1, 2, 10) |> as.integer()
+  b <- rdunif(1,-10, 10) |> as.integer()
+  c <- rdunif(1,-10, 10) |> as.integer()
+  f <- rdunif(1, -10, 10) |> as.integer()
+  f1 <- round(f/2L) |> as.integer()
+  first <- substitute(a * x + b * y <= f)
+  second <- substitute(frac(x, a) + c * y >= -f1)
+  list(first = first, second = second)
+}
+task3_quadratic <- function()
+{
+  set.seed(base_seed+3)
+  a <- rdunif(1, 6, 15) |> as.integer()
+  c <- rdunif(1, 2, 10) |> as.integer()
+  k <- rdunif(1, 1, 5) |> as.integer()
+  b <- (sqrt(a * c) - 1) |> ceiling() |> as.integer()
+  first <- substitute(frac(x ^ 2L, a) + frac(y ^ 2L, c) - frac(x * y, b) <= 6L)
+  second <- substitute(frac(x ^ 2L, c) + frac(y ^ 2L, a * k) + frac(x * y, b) <= 3L)
+  listN(first, second)
+}
+
+task3_gen <- function()
+  if(sample(c(TRUE,FALSE),1)) task3_quadratic() else task3_linear()
+
+task3 <- task3_gen()
+```
+
+Решить задачу минимизации
+
+`r mathml(task2$expr)`
+
+с ограничениями
+
+`r mathml(task3$first)`
+
+`r mathml(task3$second)`
+
+С помощью методов: cobyla, mma, ccsa, sslqp.
+Провести анализ.
+
+# Задание 4. За стеной
+
+Свести задачу условной минимизации к безусловной
+```{r include=FALSE}
+
+task4_gen <- function()
+{
+  set.seed(base_seed+4)
+  x_min <- rdunif(1, -10, 10) |> as.integer()
+  x_max <- rdunif(1,x_min, x_min + 10) |> as.integer()
+  y_min <- rdunif(1, -10, 10) |> as.integer()
+  y_max <- rdunif(1, y_min, y_min+10) |> as.integer()
+  listN(x_min,x_max,y_min,y_max)
+}
+
+task4 <- task4_gen()
+
+```
+
+Решить задачу минимизации
+
+`r mathml(task2$expr)`
+
+с ограничениями
+
+$$\begin{cases}
+      `r task4$x_min` \leq x \leq `r task4$x_max` \\
+      `r task4$y_min` \leq y \leq `r task4$y_max`
+\end{cases}$$
+
+С помощью методов: Nelder-Mead, tnewton, BFGS, Rcg.
+
+Провести анализ
+
+# Задание 5. Гладко было на бумаге, да забыли про овраги
+
+```{r include=FALSE}
+task5_gen <- function()
+{
+  set.seed(base_seed+5)
+  a1 <- rdunif(1, 5, 15) |> as.integer()
+  b1 <- rdunif(1, 5, 15) |> as.integer()
+  c1 <- rdunif(1, 5, 15) |> as.integer()
+  a2 <- rdunif(1, 1, 5) |> as.integer()
+  b2 <- rdunif(1, 1, 5) |> as.integer()
+  c2 <- rdunif(1, 1, 5) |> as.integer()
+  expr <-
+    substitute((a1 * x + b1 * y - c1) ^ 4L + (a2 * x + b2 * y - c2) ^ 4L)
+  
+  f <- \(par) eval(expr, list(x = par[1], y = par[2]))
+  listN(f, expr)
+}
+task5 <- task5_gen()
+```
+
+
+Найти безусловный минимум сильно вытянутой вдоль функции двух переменных
+
+`r mathml(task5$expr)`
+
+Вызвать функцию можно через объект 
+```{r}
+task2$f(c(1,2))
+```
+С помощью методов: Nelder-Mead, tnewton, BFGS, varmetric.
+Провести анализ
+
+# Задание 6. Дальше больше
+
+```{r include=FALSE}
+task6_gen <- function()
+{
+  set.seed(base_seed+6)
+  b <- rdunif(1, 5, 15) |> as.integer()
+  L50 <- rdunif(50, 5, 15) |> as.integer()
+  L100 <- rdunif(100, 5, 15) |> as.integer()
+  L500 <- rdunif(1000, 5, 15) |> as.integer()
+  L1000 <- rdunif(5000, 5, 15) |> as.integer()
+  f50 <- \(par) sum(par*L50 - b)^2
+  f100 <- \(par) sum(par*L100 - b)^2
+  f500 <- \(par) sum(par*L500 - b)^2
+  f1000 <- \(par) sum(par*L1000 - b)^2
+  listN(f50,f100,f500,f1000,L50,L100,L500,L1000)
+}
+
+task6 <- task6_gen()
+```
+Провести анализ для всех предложенных функций (n=50,100,500,1000)
+$$F=(\sum_{i=1}^N{L_ix_i}-b)^2$$
+
+Вызвать функцию можно через объект 
+```{r}
+task6$f50(runif(50))
+```
+
+Гиперэллипсоиды для 50, 100, 1000 переменных.
+С помощью методов: Nelder-Mead, tnewton, BFGS, Rcg.
+
+# Задание 7. Реальный мир
+
+найти минимум любым доступным методом (реализованным в R), для 3-ех функций из репозитория
+
+Провести анализ.
+
+```{r}
+task7_gen <- function()
+{
+  set.seed(base_seed + 7)
+  get_fun <- function(path)
+  {
+    source(path, local = TRUE)
+    as.list(environment())
+  }
+  l <- lapply('Box' |> dir(recursive = TRUE, full.names = TRUE) |> sample(3), get_fun)
+  names(l) <- sapply(seq_len(3), \(i) paste0('t', i))
+  l
+}
+task7 <- task7_gen()
+```
+Рассмотрим пример. Ограничения для функции
+```{r}
+task7$t1$get_xl(2)
+task7$t1$get_xu(2)
+```
+Минимальное значение функции и аргумент при котором оно реализуется
+```{r}
+task7$t1$get_xmin(2)
+task7$t1$get_fmin(2)
+```
+```{r}
+task7$t1$ChenV(c(10,10))
+```
+Саму функцию можно получить
+```{r}
+task7$t1$ChenV
+```
+Вызов функции
+```{r}
+task7$t1$ChenV(c(1,1))
+```

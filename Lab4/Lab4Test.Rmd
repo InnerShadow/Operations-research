@@ -1,0 +1,2418 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Всмомогательные методы
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+library(plotly)
+library(DescTools)
+
+slog <- \(x) sign(x)*log(abs(x))
+
+reap <- function(...) {
+  expr <- substitute(...)
+  REAPENV <- new.env()
+  parent.env(REAPENV) <- parent.frame()
+  x <- eval(expr, REAPENV)
+  c(list(x), as.list(REAPENV))
+}
+
+sow <- function(...) {
+  expr <- substitute(alist(...))[-1]
+  for (f in rev(sys.frames())) {
+    if (exists("REAPENV", envir = f)) {
+      re <- get("REAPENV", envir = f)
+      if (is.null(names(expr))) {
+        names(expr) <-
+          if (length(expr) == 1) {
+            "sow"
+          } else {
+            letters[1:length(expr)]
+          }
+      }
+      stopifnot(all(nchar(names(expr)) != 0))
+      for (n in names(expr)) {
+        sx <- eval(expr[[n]], parent.frame())
+        cv <-
+          if (exists(n, envir = re, inherits = FALSE)) {
+            get(n, envir = re)
+          } else {
+            list()
+          }
+        if (length(cv) > 0) {
+          assign(n, append(cv, sx), envir = re)
+        } else {
+          assign(n, sx, envir = re)
+        }
+      }
+      break
+      
+    }
+  }
+  invisible(NULL)
+}
+
+sower <- function(f, n = deparse(substitute(f))) {
+  function(...) {
+    x <- f(...)
+    do.call("sow",  setNames(list(x, c(...)), c(n, paste0(n, '_arg'))))
+    x
+  }
+}
+
+optimx_trace_eval <- function(...)
+{
+  args <- list(...)
+  f <- args$fn
+  args$fn <- sower(f)
+  res <- do.call(optimx, args) |> reap()
+  df <- res$f_arg |> matrix(ncol = 2, byrow=TRUE) |> as.data.frame() 
+  colnames(df) <- c('x', 'y')
+  df$z <- res$f
+  df <- unique(df)
+  df
+}
+
+nloptr_trace_eval <- function(...)
+{
+  args <- list(...)
+  f <- args$eval_f
+  args$eval_f <- sower(f)
+  res <- do.call(nloptr, args) |> reap()
+  df <- res$f_arg |> matrix(ncol = 2, byrow=TRUE) |> as.data.frame() 
+  colnames(df) <- c('x', 'y')
+  df$z <- res$f
+  df <- unique(df)
+  df
+}
+
+constrOptim_trace_eval <- function(...)
+{
+  args <- list(...)
+  f <- args$f
+  args$f <- sower(f)
+  res <- do.call(constrOptim, args) |> reap()
+  df <- res$f_arg |> matrix(ncol = 2, byrow=TRUE) |> as.data.frame() 
+  colnames(df) <- c('x', 'y')
+  df$z <- res$f
+  df <- unique(df)
+  df
+}
+
+optimx_trace_path <- function(...)
+{
+  res <- reap({
+    it <- 1
+    repeat {
+      res <- optimx(..., itnmax = it)
+      it <- it + 1
+      sow(x = res$p1,
+          y = res$p2,
+          val = res$value)
+      if (res$convcode %in% c(0,2))
+        break
+    }
+    rm(list = c('it', 'res'))
+    invisible(NULL)
+  })
+  df <- cbind(res$x,res$y,res$val) |> unique() |> as.data.frame()
+  colnames(df) <- c('x', 'y', 'z')
+  df
+}
+
+nloptr_trace_path <- function(...)
+{
+  args <- list(...)
+  res <- reap({
+    it <- 1
+    repeat {
+      args$opts$maxeval <- it
+      res <- do.call(nloptr, args)
+      it <- it + 1
+      sow(x = res$solution[1],
+          y = res$solution[2],
+          val = res$objective)
+      if (res$status != 5)
+        break
+    }
+    rm(list = c('it', 'res'))
+    invisible(NULL)
+  })
+  df <- cbind(res$x, res$y, res$val) |> unique() |> as.data.frame()
+  colnames(df) <- c('x', 'y', 'z')
+  df
+}
+
+constrOptim_trace_path <- function(...)
+{
+  args <- list(...)
+  if(!('control' %in% names(args)))
+    args$control <- list()
+  
+  res <- reap({
+    it <- 1
+    repeat {
+      args$control$maxit <- it
+      res <- do.call(constrOptim, args)
+      it <- it + 1
+      sow(x = res$par[1],
+          y = res$par[2],
+          val = res$value)
+      if (res$convergence == 0)
+        break
+    }
+    rm(list = c('it', 'res'))
+    invisible(NULL)
+  })
+  df <- cbind(res$x,res$y,res$val) |> unique() |> as.data.frame()
+  colnames(df) <- c('x', 'y', 'z')
+  df
+}
+
+optimx_trace <- function(...)
+{
+  list(path = optimx_trace_path(...),
+       eval = optimx_trace_eval(...),
+       f = list(...)$fn)
+}
+
+nloptr_trace <- function(...)
+{
+  list(path = nloptr_trace_path(...),
+       eval = nloptr_trace_eval(...),
+       f = list(...)$eval_f)
+}
+
+constrOptim_trace <- function(...)
+{
+  list(path = constrOptim_trace_path(...),
+       eval = constrOptim_trace_eval(...),
+       f = list(...)$f)
+}
+
+animated_path <- function(res)
+{
+  f <- res$f
+  df <- res$path
+  lower <- apply(df, 2, min)
+  upper <- apply(df, 2, max)
+  x <- seq(lower[1], upper[1], length.out = 100)
+  y <- seq(lower[2], upper[2], length.out = 100)
+  n <- nrow(df)
+  z <- outer(x, y, Vectorize(\(p1, p2) c(p1, p2) |> f())) |> t() |> slog()
+  rdf <-lapply(seq_len(nrow(df)),\(i) cbind(df[1:i, ], frame=rep(i,i))) |> dplyr::bind_rows()
+  plot_ly(
+    x = x,
+    y = y,
+    z = z,
+    type = 'contour',
+    ncontours = 35,
+    name = 'уровни функции'
+  ) |>
+    add_trace(
+      x =  rdf$x,
+      y =  rdf$y,
+      frame = rdf$frame,
+      type = 'scatter',
+      mode = 'lines+markers',
+      name = 'оптимизация'
+    ) |>
+    animation_opts(frame = 1000,
+                   transition = 0,
+                   redraw = TRUE)
+}
+
+
+static_path <- function(res)
+{
+  f <- res$f
+  df <- res$path
+  edf <- res$eval
+  
+  cdf <- df
+  cdf <- rbind(cdf, edf)
+  edf <- edf[!duplicated(cdf)[(nrow(df) + 1): (nrow(df) + nrow(edf))],]
+  
+  lower <- apply(cdf, 2, min)
+  upper <- apply(cdf, 2, max)
+  x <- seq(lower[1], upper[1], length.out = 100)
+  y <- seq(lower[2], upper[2], length.out = 100)
+  n <- nrow(df)
+  z <- outer(x, y, Vectorize(\(p1, p2) c(p1, p2) |> f())) |> t() |> slog()
+  plot_ly(x = x,
+          y = y,
+          z = z,
+          type = 'contour',
+          ncontours = 35,
+          name = 'уровни функции') |>
+    add_trace(
+      x =  df$x,
+      y =  df$y,
+      type = 'scatter',
+      mode = 'lines+markers',
+      name = 'оптимизация'
+    ) |>
+    add_trace(
+      x =  df$x[1],
+      y =  df$y[1],
+      type = 'scatter',
+      mode = 'markers',
+      marker = list(color = "purple"),
+      name = 'Start'
+    ) |>
+    add_trace(
+      x =  df$x[n],
+      y =  df$y[n],
+      type = 'scatter',
+      mode = 'markers',
+      name = 'Min',
+      marker = list(color = "red")
+    ) |> add_trace(
+      x =  edf$x,
+      y =  edf$y,
+      type = 'scatter',
+      mode = 'markers',
+      name = 'Вычисления функции',
+      marker = list(color = "red")
+    )
+}
+
+library(DescTools)
+gradient_path <- function(f_g, path)
+{
+  df <- path
+  rescale <- function(x,first,last){(last-first)/(max(x)-min(x))*(x-min(x))+first}
+  
+  lower <- apply(df, 2, min)
+  upper <- apply(df, 2, max)
+  x <- seq(lower[1], upper[1], length.out = 15)
+  y <- seq(lower[2], upper[2], length.out = 15)
+  n <- nrow(df)
+  
+  g_grid <- expand.grid(x = x, y = y)
+  g_val <- apply(g_grid, 1,\(par) {gr <- f_g(par); CartToPol(gr[1],gr[2]) |> unlist()}) |> t()
+  
+  g_grid$theta <- g_val[,2]
+  g_grid$r <- g_val[,1] |> log() |> rescale(0, ((upper - lower) / 15) |> min() )
+
+  fig <- ggplot(g_grid, aes(x, y)) +
+  geom_point() +
+  geom_spoke(aes(angle = theta, radius = r))
+
+   ggplotly(fig) |>
+    add_trace(
+      x =  df$x,
+      y =  df$y,
+      type = 'scatter',
+      mode = 'lines+markers',
+      name = 'оптимизация'
+    ) |>
+    add_trace(
+      x =  df$x[1],
+      y =  df$y[1],
+      type = 'scatter',
+      mode = 'markers',
+      marker = list(color = "purple"),
+      name = 'начало'
+    ) |>
+    add_trace(
+      x =  df$x[n],
+      y =  df$y[n],
+      type = 'scatter',
+      mode = 'markers',
+      name = 'Min',
+      marker = list(color = "red")
+    )
+}
+```
+
+Continuous Golden Section (goldsectmax, goldsectmin) Gradient Descent (gd, gdls, gradasc, graddsc) Hill Climbing (hillclimbing) Simulated Annealing (sa)
+
+```{r}
+library(cmna)
+```
+
+```{r}
+f <- function(x) { x^2 - 3 * x + 3 }
+goldsectmin(f, -4, 5, m=6)
+```
+
+Исследовать методы одномерной оптимизации по числу вызово фунцкии, градиента, составить таблицу
+
+```{r}
+has_message <- function(expr) {
+  tryCatch(
+    invisible(capture.output(expr)),
+    message = function(i) TRUE
+  ) == TRUE
+}
+
+has_message(message("Hello World!"))
+# TRUE
+has_message(print("Hello World!"))
+# FALSE
+has_message(1)
+# FALSE
+```
+
+Локальная нелинейная оптимизация
+
+# Одномерная минимизация
+
+PRAXIS (PRincipal AXIS)
+
+
+
+## Минимизация с ограничениями
+
+
+Определим простую функцию $x^2 - \sqrt{2} x + 1$.
+Её минимум очевиден $M=(\frac{1}{\sqrt{2}},\frac{1}{2})$
+
+```{r}
+f <- \(x) x^2 - sqrt(2)*x + 1
+```
+
+plot_ly
+
+Аргументами interval или lower, upper задаётся область поиска.
+Аргумент maximum отвечает за цель оптимизации.
+
+```{r}
+optimise(f, c(-5,5))
+```
+
+Важный параметр tol, задаёт точность, с которой будет найден оптимум.
+Сравним с аналитическим решением разные параметры точности.
+
+```{r}
+sapply(10^c(-(1:10)),\(t) list(tolerance=t,result=sprintf('%.10f',optimise(f,c(-5,5),tol=t)$minimum ))) |> t()
+
+sprintf('%.10f',1/sqrt(2))
+```
+
+## Методы без вычисления производных
+
+1.  Не ссходимость если ограничения совпадают
+2.  Не локализация, если два экстремума
+
+В связи с особенностью одномерного случая введём для рассмотрения две функции: выпуклую и невыпуклую
+
+### Метод золотого сечения
+
+```{r}
+
+```
+
+### Комбинированный метод золотого сечения и обратных парабол
+
+Алгоритм брента.
+
+```{r}
+# optimise()
+```
+
+```{r}
+f <- function(x) { x^2 - 3 * x + 3 }
+goldsectmin(f, -4, 5, m=6)
+```
+
+1.  Расходимость при невыпуклой функции
+
+Nelder-Mead constrOptim
+
+А также все ограничения
+
+```{r include=FALSE}
+library(nloptr)
+nloptr.print.options()
+```
+
+
+# Многомерная минимизация
+
+## Безусловная минимизация
+
+### Аналитическое решение
+
+Для начала определим "хорошую" тестовую функцию.
+Её главное свойство это выпуклость.
+Определим её безусловный минимум.
+
+$$\min{F(\vec{x})}=x_1^2+x_2^2+x_1x_2+2x_1+4x_2+5$$
+
+Определим аналитически её минимум.
+
+$$\frac{\partial F}{\partial x_1}=2x_1+x_2+2$$
+
+$$\frac{\partial F}{\partial x_2}=x_1+2x_2+4$$
+
+$$\frac{\partial^2 F}{\partial x_1^2}=2$$
+
+$$\frac{\partial^2 F}{\partial x_1^2}=2$$
+
+$$\frac{\partial^2 F}{\partial x_1 x_2}=1$$
+
+Определив точку подозрительную на экстремум из системы
+
+$$
+\begin{cases}
+      2x_1+x_2+2=0\\
+      x_1+2x_2+4=0
+\end{cases}
+$$
+
+$$M=(x_1=0,x_2=-2, F=1)$$
+
+Исследуем эту точку
+
+$$
+\begin{vmatrix}
+2 & 1\\
+1 & 2
+\end{vmatrix}=4-1=3>0
+$$
+
+При этом $\frac{\partial^2 F}{\partial x_1^2}>0$ следовательно найден минимум.
+Данный минимум является как локальным, так и глобальным
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(plotly)
+
+x <- y <- seq(-5, 5, length.out = 100)
+z <- outer(x, y, \(p1,p2) { p1^2+p2^2+p1*p2+2*p1+4*p2 +5}) |> slog() |> t()
+plot_ly(x=x, y=y, z=z, type='contour', ncontours=25, name='F(p)') |> 
+  add_trace(
+    x = 0,
+    y = -2,
+    name = 'безусловный минимум',
+    type = 'scatter',
+    marker = list(color = 'red'))
+```
+
+### Численное решение
+
+Особенностью задания функции является то, что она должна аргументы передаются в неё вектором.
+
+```{r}
+f <- function(par)
+{
+  p1 <- par[1]
+  p2 <- par[2]
+  p1 ^ 2 + p2 ^ 2 + p1 * p2 + 2*p1 + 4 * p2 + 5
+}
+```
+
+Также для решателю могут быть переданы градиент
+
+```{r}
+f_g <- function(par)
+{
+  p1 <- par[1]
+  p2 <- par[2]
+  c(2 * p1 + p2 + 2, 2 * p2 + p1 + 4)
+}
+```
+
+и гессиан функции
+
+```{r}
+f_h <- function(par)
+{
+  p1 <- par[1]
+  p2 <- par[2]
+  rbind(c(2,1),c(1,2))
+}
+```
+
+Для использования метода необходимо выбрать начальное приближение
+
+```{r}
+start <- c(3,3)
+```
+
+#### Методы прямого поиска
+
+Тут сказать, что они работают без производных.
+
+##### Нелдер Мид
+
+Ссылка на то, как работает алгоритм в двух словах
+
+###### nloptr Nelder mead
+
+```{r}
+library(nloptr)
+nloptr(
+  x0 = start,
+  eval_f = f,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+
+##### Хукадживс
+
+Описание метода
+
+###### Optimx hjk
+
+```{r}
+library(optimx)
+optimx(
+  par = start,
+  fn = f,
+  method = 'hjkb'
+)
+```
+
+```{r}
+res <- optimx_trace(
+  par = start,
+  fn = f,
+  method = 'hjkb'
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+##### PRAXIS (PRincipal AXIS)
+
+Описание метода
+
+###### nloptr PRAXIS
+
+```{r}
+library(nloptr)
+nloptr(
+  x0 = start,
+  eval_f = f,
+  opts = list(algorithm = 'NLOPT_LN_PRAXIS', xtol_rel = 1.0e-8)
+)
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  opts = list(algorithm = 'NLOPT_LN_PRAXIS', xtol_rel = 1.0e-8)
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+#### Градиентные методы
+
+Тут сказать, что они работают используя знание о производных
+
+##### На основе метода ньютона
+
+Описаниие очень полезное
+
+###### nloptr Low-storage BFGS
+
+```{r}
+nloptr(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+)
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+###### nloptr Preconditioned truncated Newton
+
+```{r}
+nloptr(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  opts = list(algorithm = 'NLOPT_LD_TNEWTON_PRECOND_RESTART', xtol_rel = 1.0e-8)
+)
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  opts = list(algorithm = 'NLOPT_LD_TNEWTON_PRECOND_RESTART', xtol_rel = 1.0e-8)
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+
+###### nloptr Shifted limited-memory variable-metric
+
+```{r}
+nloptr(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  opts = list(algorithm = 'NLOPT_LD_VAR2', xtol_rel = 1.0e-8)
+)
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  opts = list(algorithm = 'NLOPT_LD_VAR2', xtol_rel = 1.0e-8)
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+###### Optimx newton
+
+```{r}
+library(optimx)
+optimx(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  method = 'nlm'
+)
+```
+
+```{r}
+res <- optimx_trace(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  method = 'nlm'
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+###### Optimix Variable metric
+
+```{r}
+library(optimx)
+optimx(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  method = 'Rvmmin'
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+res <- optimx_trace(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  method = 'Rvmmin'
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+##### Модификации сопряженных градиентов и т. д.
+
+Тут другое описание.
+
+###### optimx CG
+
+```{r}
+library(optimx)
+optimx(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  method = 'CG'
+)
+```
+
+```{r}
+res <- optimx_trace(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  method = 'CG'
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+###### optimx Rcgmin
+
+```{r}
+library(optimx)
+optimx(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  method = 'Rcgmin'
+)
+```
+
+```{r}
+res <- optimx_trace(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  method = 'Rcgmin'
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+
+## Прямоугольные ограничения неравенства
+
+### Аналитическое решение
+
+$$\begin{cases}
+  \min{F(\vec{x})}=x_1^2+x_2^2+x_1x_2+2x_1+4x_2+5\\
+      -4 \leq x_1 \leq 4 \\
+      2 \leq x_2 \leq 3
+\end{cases}$$
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(plotly)
+
+x <- y <- seq(-5, 5, length.out = 100)
+z <- outer(x, y, \(p1,p2) { p1^2+p2^2+p1*p2+2*p1+4*p2 +5}) |> slog() |> t()
+plot_ly(x=x, y=y, z=z, type="contour", ncontours=25, name='F(p)') |> 
+  add_trace(
+    x = c(-4,-4,4,4),
+    y = c(2,3,3,2),
+    fill = 'toself',
+    name = 'ограничения',
+    type = "scatter",
+    marker = list(color = 'red')) |>
+    add_trace(
+    x = 0,
+    y = -2,
+    name = 'безусловный минимум',
+    type = 'scatter',
+    marker = list(color = 'red'))
+```
+
+Преобразуем ограничения
+
+$$
+\begin{cases}
+g_1:x_1 + 4 \geq 0\\
+g_2:4 - x_1 \geq 0\\
+g_3:x_2 - 2 \geq 0\\
+g_4:3 - x_2 \geq 0
+\end{cases}
+$$
+
+Запишем функцию лагранжа нашией систмы
+
+$$
+\begin{cases}
+L(\vec{x},\vec{\mu}) = F(x) - \sum_{i=1}^4{\mu_i g_i} \\
+L(\vec{x},\vec{\mu}) = x_1^2+x_2^2+x_1 x_2+2 x_1+4 x_2+5 - \mu_1(x_1+4) - \mu_2(4-x_1) - \mu_3(x_2-2) - \mu_4 (3-x_2)\\
+\frac{\partial L(\vec{x},\vec{\mu})}{\partial x_1}=2x_1 + x_2 + 2 - \mu_1 + \mu_2 = 0\\
+\frac{\partial L(\vec{x},\vec{\mu})}{\partial x_2}=2x_2 + x_1 + 4 - \mu_3 + \mu_4 = 0\\
+g_1:\mu_1(x_1+4)=0\\
+g_2:\mu_2(4-x_1)=0\\
+g_3:\mu_3(3-x_2)=0\\
+g_4:\mu_4(3-x_2)=0\\
+\mu_1,\mu_2,\mu_3,\mu_4\geq0 
+\end{cases}
+$$
+
+Необходимо найти решение этой системы.
+Подход заключается в следующем: будем рассматривать для каждого $\mu_i>0$ и $\mu_i=0$ .
+Предположим, что $\mu_1>0$, следовательно из уравнения для $g_1 \implies x_1=-4, \mu_2=0$.
+Запишем полученную систему
+
+$$
+\begin{cases}
+x_2-6-\mu_1=0\\
+2x_2-\mu_3+\mu_4=0\\
+\mu_3(x_2-2)=0\\
+\mu_4(3-x_2)=0\\
+\mu_1,\mu_3,\mu_4\geq0 
+\end{cases}
+$$
+
+Далее опять предположим, что $\mu_3>0$.
+Из этого следует, что $x_2=2$ и $\mu_1=-4$, что является противоречием.
+Рассмотрим случай, когда $\mu_3=0$.
+Предположим, что $\mu_4>0$.
+Из этого следует, что $x_2=3$ и $\mu_1=-3$, что является противоречием.
+Далее проверим $\mu_4=0$, получаем $x_2=0$ и $\mu_1=-6$, что опять приводит к противоречию.
+Следовательно $\mu_3=0$.
+
+Таким образом перебрав все 'ветви' системы приходим к решению:
+
+$$
+\begin{cases}
+x_1 = -2\\
+x_2 = 2\\
+\mu_1 = 0\\
+\mu_2 = 0\\
+\mu3 = 6\\
+\mu_4 = 0
+\end{cases}
+$$
+
+Получаем, что минимум в точке $(-2,2,13)$.
+Докажем, это это минимум.
+Матрица Гессе функции $F(x_1,x_2)$ выглядит следующим образом
+
+$$
+\begin{bmatrix}2 & 1\\1 & 2\end{bmatrix}
+$$
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+library(plotly)
+
+x <- y <- seq(-5, 5, length.out = 100)
+z <- outer(x, y, \(p1,p2) { p1^2+p2^2+p1*p2+2*p1+4*p2 +5}) |> slog() |> t()
+plot_ly(x=x, y=y, z=z, type='contour', ncontours=30 , name='F(p)') |> 
+  add_trace(
+    x = c(-4,-4,4,4),
+    y = c(2,3,3,2),
+    fill = 'toself',
+    name = 'ограничения',
+    type = 'scatter',
+    marker = list(color = 'red')) |>
+    add_trace(
+    x = 0,
+    y = -2,
+    name = 'безусловный минимум',
+    type = "scatter",
+    marker = list(color = "red")) |>
+    add_trace(
+    x = -2,
+    y = 2,
+    name = 'условный минимум',
+    type = "scatter",
+    marker = list(color = "red"))
+```
+
+### Численное решение
+
+Большинство реализаций рассмотренных выше методов поддерживают прямоугольные ограничения области поиска.
+
+```{r}
+start <- c(3,2.5)
+lo <- c(-4,2)
+up <- c(4,3)
+```
+
+#### Методы прямого поиска
+
+##### Нелдер Мид
+
+nloptr 
+
+neldermead 
+
+Whenever a new point would lie outside the bound constraints, Box advocates moving it "just inside" the constraints by some fixed "small" distance of 10−8 or so. I couldn't see any advantage to using a fixed distance inside the constraints, especially if the optimum is on the constraint, so instead I move the point exactly onto the constraint in that case. The danger with implementing bound constraints in this way (or by Box's method) is that you may collapse the simplex into a lower-dimensional subspace. I'm not aware of a better way, however. In any case, this collapse of the simplex is somewhat ameliorated by restarting, such as when Nelder-Mead is used within the Subplex algorithm below.
+
+###### Nloptr Nelder mead
+
+```{r}
+library(nloptr)
+nloptr(
+  x0 = start,
+  eval_f = f,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+##### Хукадживс
+
+Описание метода
+
+###### Optimx hjk
+
+```{r}
+library(optimx)
+optimx(
+  par = start,
+  fn = f,
+  lower = lo,
+  upper = up,
+  method = 'hjkb'
+)
+```
+
+```{r}
+res <- optimx_trace(
+  par = start,
+  fn = f,
+  lower = lo,
+  upper = up,
+  method = 'hjkb'
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+##### BOBYQA
+
+###### nloptr BOBYQA
+
+```{r}
+library(nloptr)
+nloptr(
+  x0 = start,
+  eval_f = f,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LN_BOBYQA', xtol_rel = 1.0e-8)
+  )
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LN_BOBYQA', xtol_rel = 1.0e-8)
+  )
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+#### Градиентные методы
+
+##### На основе метода ньютона
+
+Используется гессиан
+
+###### nloptr Low-storage BFGS
+
+<https://habr.com/ru/articles/333356/>
+
+```{r}
+nloptr(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+)
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+###### nloptr Preconditioned truncated Newton
+
+```{r}
+nloptr(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LD_TNEWTON_PRECOND_RESTART', xtol_rel = 1.0e-8)
+)
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LD_TNEWTON_PRECOND_RESTART', xtol_rel = 1.0e-8)
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+
+###### nloptr Shifted limited-memory variable-metric
+
+```{r}
+nloptr(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LD_VAR2', xtol_rel = 1.0e-8)
+)
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LD_VAR2', xtol_rel = 1.0e-8)
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+###### Optimx newton
+
+```{r}
+library(optimx)
+optimx(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  lower = lo,
+  upper = up,
+  method = 'nlm'
+)
+```
+
+```{r}
+res <- optimx_trace(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  lower = lo,
+  upper = up,
+  method = 'nlm'
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+###### Optimix Variable metric
+
+```{r}
+library(optimx)
+optimx(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  lower = lo,
+  upper = up,
+  method = 'Rvmmin'
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+res <- optimx_trace(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  lower = lo,
+  upper = up,
+  method = 'Rvmmin'
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+##### Модификации сопряженных градиентов и т. д.
+
+Тут другое описание.
+
+###### optimx Rcgmin
+
+```{r}
+library(optimx)
+optimx(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  lower = lo,
+  upper = up,
+  method = 'Rcgmin'
+)
+```
+
+```{r}
+res <- optimx_trace(
+  par = start,
+  fn = f,
+  gr = f_g,
+  hess = f_h,
+  lower = lo,
+  upper = up,
+  method = 'Rcgmin'
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+## Линейные ограничения неравенста
+
+Являются частным случаем нелинейных, большинство алгоритмов работает с ними, как с нелинейными.
+
+### Аналитическое решение
+
+$$
+\begin{cases}
+      \min{F(\vec{x})}=x_1^2+x_2^2+x_1x_2+2x_1+4x_2+5\\
+      2 x_1 + x_2 \geq 0\\
+      x_1 + 2 x_2 \leq 1
+\end{cases}
+$$
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+library(plotly)
+
+x <- y <- seq(-5, 5, length.out = 100)
+z <- outer(x, y, \(p1, p2) {p1 ^ 2 + p2 ^ 2 + p1 * p2 + 2 * p1 + 4 * p2 + 5}) |> slog() |> t()
+l1_x <- seq(-5/2, 5/2, length.out = 100)
+l2 <- (1 - x) / 2
+l1 <- -2 * l1_x
+plot_ly(
+  x = x,
+  y = y,
+  z = z,
+  type = "contour",
+  ncontours = 30,
+  name = 'F(p)'
+) |>
+  add_trace(
+    x = c(5, 5, -1/3,  2.5),
+    y = c(-5, -2, 2/3, -5),
+    fill = 'toself',
+    name = 'ограничения',
+    type = "scatter",
+    marker = list(color = 'red')
+  ) |>
+  add_trace(
+    x = 0,
+    y = -2,
+    name = 'безусловный минимум',
+    type = 'scatter',
+    marker = list(color = 'red')
+  ) |>
+  add_trace(x=l1_x,y=l1,type='scatter', mode='lines', name=TeX('l_1')) |>
+  add_trace(x=x,y=l2,type='scatter', mode='lines', name=TeX('l_2')) |> 
+  config(mathjax = 'cdn')
+```
+
+Преобразуем ограничения
+
+$$
+\begin{cases}
+g_1:(2 x_1 + x_2) \geq 0\\
+g_2:(-x_1-2x_2+1) \geq 0
+\end{cases}
+$$
+
+Сформируем функцию Лагранжа
+
+$$
+\begin{cases}
+L(\vec{x},\vec{\mu})=x_1^2+x_2^2+x_1x_2+2x_1+4x_2+5-\mu_1(2x_1+x_2)-\mu_2(-x_1-2x_2+1)\\
+\frac{\partial L(\vec{x},\vec{\mu})}{\partial x_1}=2x_1 + x_2 + 2 - 2\mu_1 + \mu_2 = 0\\
+\frac{\partial L(\vec{x},\vec{\mu})}{\partial x_2}=2x_2 + x_1 + 4 - \mu_1 + 2\mu_2 = 0\\
+g_1:\mu_1(2x_1+x_2)=0\\
+g_2:\mu_2(-x_1-2x_2+1)=0\\
+\mu_1,\mu_2 \geq 0
+\end{cases}
+$$
+
+Допустим, что $\mu_1>0$, тогда $(2x_1+x_2)=0$, $x_2=-2x_1$, откуда система:
+
+$$
+\begin{cases}
+2-2\mu_1+\mu_2=0\\
+4-3x_1-\mu_1+2\mu_2=0\\
+\mu_2(3x_1+1)=0\\
+\mu_1,\mu_2>0
+\end{cases}
+$$ 
+
+Предположим, что $\mu_2>0$, следовательно $x_1=-\frac{1}{3}$ и система преобразуется в:
+
+$$
+\begin{cases}
+2-2\mu_1+\mu_2=0\\
+7-\mu_1+2\mu_2=0\\
+\mu_1,\mu_2>0
+\end{cases}
+$$ 
+
+Откуда следует, что $\mu_2=-4$, что является противоречием.
+Рассмотрим случай, когда $\mu_2=0$.
+Тогда
+
+$$
+\begin{cases}
+2-2\mu_1=0\\
+4-3x_1-\mu_1=0\\
+\mu_1>0
+\end{cases}
+$$
+
+Легко получить решение:
+
+$$
+\begin{cases}
+x_1 = 1\\
+x_2 = -2\\
+\mu_1 = 1\\
+\mu_2 = 0
+\end{cases}
+$$
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+library(plotly)
+
+x <- y <- seq(-5, 5, length.out = 100)
+z <- outer(x, y, \(p1, p2) {p1 ^ 2 + p2 ^ 2 + p1 * p2 + 2 * p1 + 4 * p2 + 5}) |> slog() |> t()
+l1_x <- seq(-5/2, 5/2, length.out = 100)
+l2 <- (1 - x) / 2
+l1 <- -2 * l1_x
+plot_ly(
+  x = x,
+  y = y,
+  z = z,
+  type = "contour",
+  ncontours = 30,
+  name = 'F(p)'
+) |>
+  add_trace(
+    x = c(5, 5, -1/3,  2.5),
+    y = c(-5, -2, 2/3, -5),
+    fill = 'toself',
+    name = 'ограничения',
+    type = "scatter",
+    marker = list(color = 'red')
+  ) |>
+  add_trace(
+    x = 0,
+    y = -2,
+    name = 'безусловный минимум',
+    type = 'scatter',
+    marker = list(color = 'red')
+  ) |>
+  add_trace(
+    x = 1,
+    y = -2,
+    name = 'условный минимум',
+    type = 'scatter',
+    marker = list(color = "red")) |>
+  add_trace(x=l1_x,y=l1,type='scatter', mode='lines', name=TeX('l_1')) |>
+  add_trace(x=x,y=l2,type='scatter', mode='lines', name=TeX('l_2')) |> 
+  config(mathjax = 'cdn')
+```
+
+### Численное решение
+
+#### Методы прямого поиска
+
+##### Штрафные функции
+
+хоть метод и является достаточно общим рассмотрим применение в пакетах
+
+###### constrOptim neldermead
+
+Преобразуем ограничения из примера 
+
+$$
+\begin{cases}
+      2 p_1 + p_2 \geq 0\\
+      p_1 + 2 p_2 \leq 1
+\end{cases}
+$$
+
+к форме, принимаемой методом $Ax-B\geq0$: 
+
+$$
+\begin{cases}
+ 2p_1+p_2 - 0 \geq 0 \\
+ -p_1-2p_2 - (-1) \geq 0 \\
+\end{cases}
+$$ 
+
+Тогда матрица ограничений A
+
+```{r}
+(A <- rbind(c(2,1),c(-1,-2)))
+```
+
+А вектор стобец свободных членов
+
+```{r}
+(B <- c(0,-1))
+```
+
+Начальное приближение должно быть в доступной области
+
+```{r}
+constrOptim(
+  theta = c(4,-4),
+  f = f,
+  grad = NULL,
+  ui = A,
+  ci = B
+)
+```
+
+```{r}
+res <- constrOptim_trace(
+  theta = c(4,-4),
+  f = f,
+  grad = NULL,
+  ui = A,
+  ci = B
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+gradient_path(f_g, res$path)
+```
+
+##### COBYLA
+
+###### nloptr COBYLA
+
+Преобразуем ограничения из примера 
+
+$$
+\begin{cases}
+ 2p_1+p_2 \geq 0 \\
+ p_1+2p_2 \leq 1 \\
+\end{cases}
+$$ 
+
+к форме, принимаемой методом 
+
+$$
+\begin{cases}
+ -2p_1-p_2 \leq 0 \\
+ p_1+2p_2 - 1 \leq 0 \\
+\end{cases}
+$$ 
+
+Функция ограничений возвращает вектор размерности колличества ограничений
+
+```{r}
+start <- c(4,-4)
+constr_ineq <- function(par)
+{
+  p1 <- par[1]
+  p2 <- par[2]
+  c(-2 * p1 - p2, p1 + 2 * p2 - 1)
+}
+```
+
+А также якобиан ограничений.
+Колличество строк равно колличеству ограничений, а колличество столбцов это колличество переменных.
+
+```{r}
+constr_ineq_jac <- function(par)
+{
+  rbind(c(-2, -1),
+        c(1, 2))
+}
+```
+
+Передаём все в процедуру решения.
+Только некоторые методы поддерживают нелинейные ограничения NLOPT_LD_MMA
+
+```{r}
+nloptr(
+  x0 = start,
+  eval_f = f,
+  eval_g_ineq = constr_ineq,
+  opts = list(
+    algorithm = 'NLOPT_LN_COBYLA',
+    xtol_rel = 1.0e-8
+  )
+)
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  #eval_grad_f = f_g,
+  eval_g_ineq = constr_ineq,
+  #eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LN_COBYLA',
+    xtol_rel = 1.0e-8
+  )
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+
+#### Градиентные методы
+
+##### MMA
+
+###### nloptr MMA
+
+Пакет предоставляет один интерфейс как для линейных, так и для нелинейных ограничений Задаваемые ограничения дожны быть преведены к форме 
+
+$$
+\begin{cases}
+ g(x) \leq 0 \\
+ h(x) = 0 \\
+\end{cases}
+$$
+
+Преобразуем ограничения из примера 
+
+$$
+\begin{cases}
+ 2p_1+p_2 \geq 0 \\
+ p_1+2p_2 \leq 1 \\
+\end{cases}
+$$ 
+
+к форме, принимаемой методом 
+
+$$
+\begin{cases}
+ -2p_1-p_2 \leq 0 \\
+ p_1+2p_2 - 1 \leq 0 \\
+\end{cases}
+$$ 
+
+Функция ограничений возвращает вектор размерности колличества ограничений
+
+```{r}
+start <- c(4,-4)
+constr_ineq <- function(par)
+{
+  p1 <- par[1]
+  p2 <- par[2]
+  c(-2 * p1 - p2, p1 + 2 * p2 - 1)
+}
+```
+
+А также якобиан ограничений.
+Колличество строк равно колличеству ограничений, а колличество столбцов это колличество переменных.
+
+```{r}
+constr_ineq_jac <- function(par)
+{
+  rbind(c(-2, -1),
+        c(1, 2))
+}
+```
+
+Передаём все в процедуру решения.
+
+```{r}
+nloptr(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  eval_g_ineq = constr_ineq,
+  eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_MMA',
+    xtol_rel = 1.0e-8
+  )
+)
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  eval_g_ineq = constr_ineq,
+  eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_MMA',
+    xtol_rel = 1.0e-8
+  )
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+##### CCSA
+
+###### nloptr CCSAQ
+
+Пакет предоставляет один интерфейс как для линейных, так и для нелинейных ограничений Задаваемые ограничения дожны быть преведены к форме 
+
+$$
+\begin{cases}
+ g(x) \leq 0 \\
+ h(x) = 0 \\
+\end{cases}
+$$
+
+Преобразуем ограничения из примера 
+
+$$
+\begin{cases}
+ 2p_1+p_2 \geq 0 \\
+ p_1+2p_2 \leq 1 \\
+\end{cases}
+$$ 
+
+к форме, принимаемой методом 
+
+$$
+\begin{cases}
+ -2p_1-p_2 \leq 0 \\
+ p_1+2p_2 - 1 \leq 0 \\
+\end{cases}
+$$ 
+
+Функция ограничений возвращает вектор размерности колличества ограничений
+
+```{r}
+start <- c(4,-4)
+constr_ineq <- function(par)
+{
+  p1 <- par[1]
+  p2 <- par[2]
+  c(-2 * p1 - p2, p1 + 2 * p2 - 1)
+}
+```
+
+А также якобиан ограничений.
+Колличество строк равно колличеству ограничений, а колличество столбцов это колличество переменных.
+
+```{r}
+constr_ineq_jac <- function(par)
+{
+  rbind(c(-2, -1),
+        c(1, 2))
+}
+```
+
+Передаём все в процедуру решения.
+
+```{r}
+nloptr(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  eval_g_ineq = constr_ineq,
+  eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_CCSAQ',
+    xtol_rel = 1.0e-8
+  )
+)
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  eval_g_ineq = constr_ineq,
+  eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_CCSAQ',
+    xtol_rel = 1.0e-8
+  )
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+##### SLSQP
+
+###### nloptr SLSQP
+
+Пакет предоставляет один интерфейс как для линейных, так и для нелинейных ограничений Задаваемые ограничения дожны быть преведены к форме 
+
+$$
+\begin{cases}
+ g(x) \leq 0 \\
+ h(x) = 0 \\
+\end{cases}
+$$
+
+Преобразуем ограничения из примера 
+
+$$
+\begin{cases}
+ 2p_1+p_2 \geq 0 \\
+ p_1+2p_2 \leq 1 \\
+\end{cases}
+$$ 
+
+к форме, принимаемой методом 
+
+$$
+\begin{cases}
+ -2p_1-p_2 \leq 0 \\
+ p_1+2p_2 - 1 \leq 0 \\
+\end{cases}
+$$ 
+
+Функция ограничений возвращает вектор размерности колличества ограничений
+
+```{r}
+start <- c(4,-4)
+constr_ineq <- function(par)
+{
+  p1 <- par[1]
+  p2 <- par[2]
+  c(-2 * p1 - p2, p1 + 2 * p2 - 1)
+}
+```
+
+А также якобиан ограничений.
+Колличество строк равно колличеству ограничений, а колличество столбцов это колличество переменных.
+
+```{r}
+constr_ineq_jac <- function(par)
+{
+  rbind(c(-2, -1),
+        c(1, 2))
+}
+```
+
+Передаём все в процедуру решения.
+
+```{r}
+nloptr(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  eval_g_ineq = constr_ineq,
+  eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_SLSQP',
+    xtol_rel = 1.0e-8
+  )
+)
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  eval_g_ineq = constr_ineq,
+  eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_SLSQP',
+    xtol_rel = 1.0e-8
+  )
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+##### L-BGFS-B
+
+######  constroptim L-BGFS-B
+
+Преобразуем ограничения из примера 
+
+$$
+\begin{cases}
+      2 p_1 + p_2 \geq 0\\
+      p_1 + 2 p_2 \leq 1
+\end{cases}
+$$
+
+к форме, принимаемой методом $Ax-B\geq0$: 
+
+$$
+\begin{cases}
+ 2p_1+p_2 - 0 \geq 0 \\
+ -p_1-2p_2 - (-1) \geq 0 \\
+\end{cases}
+$$ 
+
+Тогда матрица ограничений A
+
+```{r}
+(A <- rbind(c(2,1),c(-1,-2)))
+```
+
+А вектор стобец свободных членов
+
+```{r}
+(B <- c(0,-1))
+```
+
+Начальное приближение должно быть в доступной области
+
+```{r}
+constrOptim(
+  theta = c(4,-4),
+  f = f,
+  grad = f_g,
+  ui = A,
+  ci = B
+)
+```
+
+```{r}
+res <- constrOptim_trace(
+  theta = c(4,-4),
+  f = f,
+  grad = f_g,
+  ui = A,
+  ci = B
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+## Нелинейные ограничения неравенства
+
+Все методы рассмотренные выше, кроме constrOptim применимы в этом случае
+
+## Нелинейные ограничения равенства
+
+### Аналитическое решение
+
+$$
+\begin{cases}
+\min{F(\vec{x})}=x_1^2+x_2^2+x_1x_2+2x_1+4x_2+5\\
+g1:x_1^2 - x_1 x_2 = -2
+\end{cases}
+$$
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+library(plotly)
+
+x <- y <- seq(-5, 5, length.out = 100)
+z <- outer(x, y, \(p1, p2) {p1 ^ 2 + p2 ^ 2 + p1 * p2 + 2 * p1 + 4 * p2 + 5}) |> slog() |> t()
+p1_x <- seq(1/2*(5-sqrt(17)), 1/2*(5+sqrt(17)), length.out = 100)
+p2_x <- seq(1/2*(-5-sqrt(17)), 1/2*(-5+sqrt(17)), length.out = 100)
+p1 <- (2 + p1_x^2)/p1_x
+p2 <- (2 + p2_x^2)/p2_x
+plot_ly(
+  x = x,
+  y = y,
+  z = z,
+  type = "contour",
+  ncontours = 30,
+  name = 'F(p)'
+) |>
+  add_trace(
+    x = 0,
+    y = -2,
+    name = 'безусловный минимум',
+    type = 'scatter',
+    marker = list(color = 'red')
+  ) |>
+  add_trace(x=p1_x,y=p1,type='scatter', mode='lines', name=TeX('l_1')) |>
+  add_trace(x=p2_x,y=p2,type='scatter', mode='lines', name=TeX('l_2')) |> 
+  config(mathjax = 'cdn')
+```
+
+Переформулируем ограничения
+
+$$x_1^2 - x_1 x_2 + 2 = 0$$
+
+Сформируем функцию Лагранжа
+
+$$
+\begin{cases}
+L(\vec{x},\vec{\mu})=x_1^2+x_2^2+x_1x_2+2x_1+4x_2+5-\mu_1(x_1^2-x_1x_2+2)\\
+\frac{\partial L(\vec{x},\vec{\mu})}{\partial x_1}=2x_1 + x_2 + 2 - \mu_1(2x_1-x_2)= 0\\
+\frac{\partial L(\vec{x},\vec{\mu})}{\partial x_2}=2x_2 + x_1 + 4 + \mu_1 x_1 = 0\\
+g_1:\mu_1(x_1^2-x_1x_2+2)=0\\
+\mu_1 \geq 0
+\end{cases}
+$$
+
+Пусть $\mu_1>0$, тогда $x_1^2-x_1x_2+2=0$.
+Рассмотрим случай, когда $x_1=x_2$.
+Система представляется так: 
+
+$$
+\begin{cases}
+2x_1+x_2+2-\mu_1(2x_1-x_2)=0\\
+2x_2+x_1+4+\mu_1x_1=0\\
+\mu_1(x_1^2-x_1x_2+2)=0\\
+\mu_1\geq 0
+\end{cases}
+$$
+
+Пусть $\mu_1>0$, следовательно $x_1^2-x_1x_2+2=0$.
+Выразим $x_2=\frac{2+x_1^2}{x_1}$, тогда система после подстановки и преобразования:
+
+$$
+\begin{cases}
+x_1^2(3-\mu_1)+2x_1+\mu_1+2=0\\
+(3+\mu_1)x_1^2+4x_1+4=0\\
+\end{cases}
+$$
+
+Выразим из второго уравненя
+
+$$
+\mu_1=-\frac{3x_1^2+4x_1+4}{x_1^2}
+$$
+
+И подставим в первое
+
+$$
+6x_1^4+6x_1^3-8x_1-8=0
+$$
+
+Отсюда подбором получается корень $x_1=-1$.
+Общее решение:
+
+$$
+\begin{cases}
+x_1=-3\\
+x_2=-3\\
+\mu_1=1
+\end{cases}
+$$
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+library(plotly)
+
+x <- y <- seq(-5, 5, length.out = 100)
+z <- outer(x, y, \(p1, p2) {p1 ^ 2 + p2 ^ 2 + p1 * p2 + 2 * p1 + 4 * p2 + 5}) |> slog() |> t()
+p1_x <- seq(1/2*(5-sqrt(17)), 1/2*(5+sqrt(17)), length.out = 100)
+p2_x <- seq(1/2*(-5-sqrt(17)), 1/2*(-5+sqrt(17)), length.out = 100)
+p1 <- (2 + p1_x^2)/p1_x
+p2 <- (2 + p2_x^2)/p2_x
+plot_ly(
+  x = x,
+  y = y,
+  z = z,
+  type = "contour",
+  ncontours = 30,
+  name = 'F(p)'
+) |>
+  add_trace(
+    x = 0,
+    y = -2,
+    name = 'безусловный минимум',
+    type = 'scatter',
+    marker = list(color = 'red')
+  ) |>
+    add_trace(
+    x = -1,
+    y = -3,
+    name = 'условный минимум',
+    type = 'scatter',
+    marker = list(color = 'red')
+  ) |>
+  add_trace(x=p1_x,y=p1,type='scatter', mode='lines', name=TeX('l_1')) |>
+  add_trace(x=p2_x,y=p2,type='scatter', mode='lines', name=TeX('l_2')) |> 
+  config(mathjax = 'cdn')
+```
+
+### Численное решение
+
+##### CCSA
+
+###### nloptr CCSAQ
+
+Пакет предоставляет один интерфейс как для линейных, так и для нелинейных ограничений Задаваемые ограничения дожны быть преведены к форме 
+
+$$
+\begin{cases}
+ g(x) \leq 0 \\
+ h(x) = 0 \\
+\end{cases}
+$$
+
+Преобразуем ограничение из примера $$p_1^2 - p_1 p_2 = -2$$ к форме требуемой в пакете $$p_1^2 - p_1 p_2 + 2=0$$ Определим функцию ограничения равенства
+
+```{r}
+start <- c(5,2)
+constr_eq <- function(par)
+{
+  p1 <- par[1]
+  p2 <- par[2]
+  p1^2 - p1*p2
+}
+```
+
+И якобиан
+
+```{r}
+constr_eq_jac <- function(par)
+{
+  p1 <- par[1]
+  p2 <- par[2]
+  c(2*p1-p2, -p1)
+}
+```
+
+Выозов метода
+
+```{r}
+nloptr(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  eval_g_eq = constr_eq,
+  eval_jac_g_eq = constr_eq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_SLSQP',
+    xtol_rel = 1.0e-8
+  )
+)
+```
+
+```{r}
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = f,
+  eval_grad_f = f_g,
+  eval_g_eq = constr_eq,
+  eval_jac_g_eq = constr_eq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_SLSQP',
+    xtol_rel = 1.0e-8
+  )
+)
+```
+
+```{r warning=FALSE, message=FALSE}
+animated_path(res)
+```
+
+```{r warning=FALSE, message=FALSE}
+static_path(res)
+```
+
+```{r}
+gradient_path(f_g,res$path)
+```
+
+
+# Подход к работе с ограничениями
+
+Рассмотрим ограничения на примере уже рассмотренной минимизации функции двух переменных с линейными ограничениями.
+Рассмотрим возможность сведения задачи условной оптимизации к безусловной.
+[Картинка 3D, формулирование условий,]
+
+## Метод барьерной функции
+
+## Метод штрафов
+
+# Приложение
+
+<https://www.monographies.ru/ru/book/section?id=2327>
+
+Применяются условия Куна-Такера [теория по ним]
+
+Определив положение минимума введём в рассмотрение несколько ограничений.
+Аналитически определим минимум в каждом из рассматриваемых случаев.
+
+## Пакет Optimx
+
+Пакет Optimix предлагает унифицированный интерфейс для решателей из других пакетов, поддерживающий безусловную минимизацию и минимизацию с прямоугольными ограничениями.
+Не все решатели, входящие в пакет поддерживабт решение задачи максимизации.
+
+Используем параметры по умолчанию для вызова функции
+
+```{r}
+library(optimx)
+optimx(par = start,
+       fn = f,
+       gr = f_g,
+       hess = f_h)
+```
+
+В таблице результатов представлены результаты двух методов, применяющихся по умолчанию.
+P1 и P2 это аргументы точки минимума, value значение.
+Также доступна информация о числе вызовов функции и градиента, числе итераций проведённых методом, результате сходимости и проверке условий Куна-Такера.
+[Подписать всё в скобках].
+
+### Controls
+
+Поведением методов, которые вызываются функций optimix можно задать управлениеим
+
+```{r}
+ctl <- list(all.methods=TRUE, save.failures=TRUE, trace=0)
+```
+
+Максимальное число итераций задаётся параметром itnmax (для тех методов, которые поддерживают).
+В связке с возвращаемым значением convcode даёт возможность отследить процесс решения задачи оптимизации.
+
+### Линейные ограничения
+
+
+
+
+
+### Нелинейные ограничения
+
+Преимуществом является то, что пакет позволяет использовать ограничения равенства.
+
+# Общий подход для анализа итеративных методов
+
+Рассмотрим на примере решённой выше задачи безусловной оптимизации.
+
+```{r}
+f <- function(par)
+{
+  p1 <- par[1]
+  p2 <- par[2]
+  p1 ^ 2 + p2 ^ 2 + p1 * p2 + 2*p1 + 4 * p2 + 5
+}
+```
+
+## Запоминание значений функции
+
+Функция reap() определяет новый enviroment и вызывает её аргумент в этом контексте.
+Функция sow принимает список именованных параметров, присваивает их ближайшему enviroment «reap».
+В итоге, reap() вернет список с "естественным" возвращаемым значением выражения, которое было передано в качестве первого элемента, а затем добавит именованные элементы, соответствующие именам, использованным во время вызовов sow().
+
+```{r}
+reap(sum(sapply(1:5, function(i) { sow(squares=i * i); i * i * i; })))
+```
+
+Дополнительно для введём функцию обёртку, с помощью которой любую функцию можно преобразовать в объект, который будет запоминать аргументы и вычисленное значение функции.
+
+Пример использования
+
+```{r}
+reap(sower(f)(start))
+```
+
+Такой подход будет использован при вызове функций оптимизации.
+С его помощью мы расчитаем колличество обращений к целевой функции, градиенту и гессиану.
+
+Также рассмотрим все точки в которых метод вычислил значение функции.
+Для этого применим подход sow/reap к функции оптимизации.
+Обернём функции f в sower(f), чтобы сохранить промежуточные значения.
+Далее соберём значения через reap Теперь преобразуем массив аргументов функции в data.frame
+
+## Ограничение числа итераций
+
+### Optimx
+
+Для визуализации процесса поиска решения.
+
+Пользуемся возможностью остановить алгоритм после произвольной итерации.
+Крутим цикл пока не добъемся сходимости и сохраняем промежутояные результаты.
+Внимание, обязательно передавать аргуементы только по именованым параметрам.
+
+С помощью передачи аргументов через ...
+вызов аналогичен вызову метода optimx.
+В возвращаемом списке содержатся значения последовательных приближений к минимуму.
+
+### Nloptr
+
+В библиотеке nloptr применяется другой подход, здесь ограничивается число вычислений функции.
+maxeval Внимание, обязательно передавать аргуементы только по именованым параметрам.
+
+С помощью передачи аргументов через ...
+вызов аналогичен вызову метода optimx.
+В возвращаемом списке содержатся значения последовательных приближений к минимуму.
+
+### constrOptim
+
+Вызов.
+
+Для любой конкретной задачи оптимизации рекомендуется сравнить несколько доступных алгоритмов, применимых к этой задаче — в общем, часто обнаруживается, что «лучший» алгоритм сильно зависит от решаемой задачи.
+
+Однако сравнение алгоритмов требует некоторой осторожности, поскольку не все тесты на толерантность к значению функции/параметру реализуются одинаково для разных алгоритмов.
+Так, например, один и тот же дробный допуск 10−4 на значение функции может дать гораздо более точный минимум в одном алгоритме по сравнению с другим, и их сопоставление может потребовать некоторых экспериментов с допусками.
+
+Вместо этого более справедливый и надежный способ сравнить два разных алгоритма — запустить один до тех пор, пока значение функции не сойдется к некоторому значению fA, а затем запустить второй алгоритм с тестом завершения minf_max, установленным на minf_max=fA.
+То есть спросите, сколько времени потребуется двум алгоритмам, чтобы достичь одного и того же значения функции.
+
+А еще лучше, запустите какой-нибудь алгоритм в течение очень долгого времени, пока минимальная fM не будет найдена с высокой точностью.
+Затем запустите различные алгоритмы, которые вы хотите сравнить с тестом завершения: minf_max=fM+Δf.
+То есть спросите, сколько времени требуется различным алгоритмам, чтобы получить минимум Δf с точностью до абсолютного допуска для некоторого Δf.
+(Это полностью отличается от использования теста завершения ftol_abs, поскольку последний использует только приблизительную оценку ошибки в значениях функции, и, более того, эта оценка варьируется в зависимости от алгоритма.)
+
+```{r}
+library(optimx)
+checkallsolvers()
+```
+
+nloptr seed random.
+set.seed(1421)
+
+Те два сайта с расписанными реальными проблемами оптимизации
