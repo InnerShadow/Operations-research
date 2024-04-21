@@ -1,6 +1,3 @@
-Конечно, вот код с комментариями на R:
-  
-  ```r
 # Определение функции GallagherGaussian101BBOB
 GallagherGaussian101BBOB <- function(x) {
   # Проверка, были ли переданы аргументы в функцию
@@ -135,5 +132,6 @@ unif <- function(N, inseed) {
   }
   aktrand <- rgrand[1]
   r <- numeric(N)
+}
   
   
