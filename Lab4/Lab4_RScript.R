@@ -1,0 +1,1737 @@
+library(plotly)
+library(DescTools)
+
+slog <- \(x) sign(x)*log(abs(x))
+
+reap <- function(...) {
+  expr <- substitute(...)
+  REAPENV <- new.env()
+  parent.env(REAPENV) <- parent.frame()
+  x <- eval(expr, REAPENV)
+  c(list(x), as.list(REAPENV))
+}
+
+sow <- function(...) {
+  expr <- substitute(alist(...))[-1]
+  for (f in rev(sys.frames())) {
+    if (exists("REAPENV", envir = f)) {
+      re <- get("REAPENV", envir = f)
+      if (is.null(names(expr))) {
+        names(expr) <-
+          if (length(expr) == 1) {
+            "sow"
+          } else {
+            letters[1:length(expr)]
+          }
+      }
+      stopifnot(all(nchar(names(expr)) != 0))
+      for (n in names(expr)) {
+        sx <- eval(expr[[n]], parent.frame())
+        cv <-
+          if (exists(n, envir = re, inherits = FALSE)) {
+            get(n, envir = re)
+          } else {
+            list()
+          }
+        if (length(cv) > 0) {
+          assign(n, append(cv, sx), envir = re)
+        } else {
+          assign(n, sx, envir = re)
+        }
+      }
+      break
+      
+    }
+  }
+  invisible(NULL)
+}
+
+sower <- function(f, n = deparse(substitute(f))) {
+  function(...) {
+    x <- f(...)
+    do.call("sow",  setNames(list(x, c(...)), c(n, paste0(n, '_arg'))))
+    x
+  }
+}
+
+optimx_trace_eval <- function(...)
+{
+  args <- list(...)
+  f <- args$fn
+  args$fn <- sower(f)
+  res <- do.call(optimx, args) |> reap()
+  df <- res$f_arg |> matrix(ncol = 2, byrow=TRUE) |> as.data.frame() 
+  colnames(df) <- c('x', 'y')
+  df$z <- res$f
+  df <- unique(df)
+  df
+}
+
+nloptr_trace_eval <- function(...)
+{
+  args <- list(...)
+  f <- args$eval_f
+  args$eval_f <- sower(f)
+  res <- do.call(nloptr, args) |> reap()
+  df <- res$f_arg |> matrix(ncol = 2, byrow=TRUE) |> as.data.frame() 
+  colnames(df) <- c('x', 'y')
+  df$z <- res$f
+  df <- unique(df)
+  df
+}
+
+constrOptim_trace_eval <- function(...)
+{
+  args <- list(...)
+  f <- args$f
+  args$f <- sower(f)
+  res <- do.call(constrOptim, args) |> reap()
+  df <- res$f_arg |> matrix(ncol = 2, byrow=TRUE) |> as.data.frame() 
+  colnames(df) <- c('x', 'y')
+  df$z <- res$f
+  df <- unique(df)
+  df
+}
+
+optimx_trace_path <- function(...)
+{
+  res <- reap({
+    it <- 1
+    repeat {
+      res <- optimx(..., itnmax = it)
+      it <- it + 1
+      sow(x = res$p1,
+          y = res$p2,
+          val = res$value)
+      if (res$convcode %in% c(0,2))
+        break
+    }
+    rm(list = c('it', 'res'))
+    invisible(NULL)
+  })
+  df <- cbind(res$x,res$y,res$val) |> unique() |> as.data.frame()
+  colnames(df) <- c('x', 'y', 'z')
+  df
+}
+
+nloptr_trace_path <- function(...)
+{
+  args <- list(...)
+  res <- reap({
+    it <- 1
+    repeat {
+      args$opts$maxeval <- it
+      res <- do.call(nloptr, args)
+      it <- it + 1
+      sow(x = res$solution[1],
+          y = res$solution[2],
+          val = res$objective)
+      if (res$status != 5)
+        break
+    }
+    rm(list = c('it', 'res'))
+    invisible(NULL)
+  })
+  df <- cbind(res$x, res$y, res$val) |> unique() |> as.data.frame()
+  colnames(df) <- c('x', 'y', 'z')
+  df
+}
+
+constrOptim_trace_path <- function(...)
+{
+  args <- list(...)
+  if(!('control' %in% names(args)))
+    args$control <- list()
+  
+  res <- reap({
+    it <- 1
+    repeat {
+      args$control$maxit <- it
+      res <- do.call(constrOptim, args)
+      it <- it + 1
+      sow(x = res$par[1],
+          y = res$par[2],
+          val = res$value)
+      if (res$convergence == 0)
+        break
+    }
+    rm(list = c('it', 'res'))
+    invisible(NULL)
+  })
+  df <- cbind(res$x,res$y,res$val) |> unique() |> as.data.frame()
+  colnames(df) <- c('x', 'y', 'z')
+  df
+}
+
+optimx_trace <- function(...)
+{
+  list(path = optimx_trace_path(...),
+       eval = optimx_trace_eval(...),
+       f = list(...)$fn)
+}
+
+nloptr_trace <- function(...)
+{
+  list(path = nloptr_trace_path(...),
+       eval = nloptr_trace_eval(...),
+       f = list(...)$eval_f)
+}
+
+constrOptim_trace <- function(...)
+{
+  list(path = constrOptim_trace_path(...),
+       eval = constrOptim_trace_eval(...),
+       f = list(...)$f)
+}
+
+animated_path <- function(res)
+{
+  f <- res$f
+  df <- res$path
+  lower <- apply(df, 2, min)
+  upper <- apply(df, 2, max)
+  x <- seq(lower[1], upper[1], length.out = 100)
+  y <- seq(lower[2], upper[2], length.out = 100)
+  n <- nrow(df)
+  z <- outer(x, y, Vectorize(\(p1, p2) c(p1, p2) |> f())) |> t() |> slog()
+  rdf <-lapply(seq_len(nrow(df)),\(i) cbind(df[1:i, ], frame=rep(i,i))) |> dplyr::bind_rows()
+  plot_ly(
+    x = x,
+    y = y,
+    z = z,
+    type = 'contour',
+    ncontours = 35,
+    name = 'уровни функции'
+  ) |>
+    add_trace(
+      x =  rdf$x,
+      y =  rdf$y,
+      frame = rdf$frame,
+      type = 'scatter',
+      mode = 'lines+markers',
+      name = 'оптимизация'
+    ) |>
+    animation_opts(frame = 1000,
+                   transition = 0,
+                   redraw = TRUE)
+}
+
+
+static_path <- function(res)
+{
+  f <- res$f
+  df <- res$path
+  edf <- res$eval
+  
+  cdf <- df
+  cdf <- rbind(cdf, edf)
+  edf <- edf[!duplicated(cdf)[(nrow(df) + 1): (nrow(df) + nrow(edf))],]
+  
+  lower <- apply(cdf, 2, min)
+  upper <- apply(cdf, 2, max)
+  x <- seq(lower[1], upper[1], length.out = 100)
+  y <- seq(lower[2], upper[2], length.out = 100)
+  n <- nrow(df)
+  z <- outer(x, y, Vectorize(\(p1, p2) c(p1, p2) |> f())) |> t() |> slog()
+  plot_ly(x = x,
+          y = y,
+          z = z,
+          type = 'contour',
+          ncontours = 35,
+          name = 'уровни функции') |>
+    add_trace(
+      x =  df$x,
+      y =  df$y,
+      type = 'scatter',
+      mode = 'lines+markers',
+      name = 'оптимизация'
+    ) |>
+    add_trace(
+      x =  df$x[1],
+      y =  df$y[1],
+      type = 'scatter',
+      mode = 'markers',
+      marker = list(color = "purple"),
+      name = 'Start'
+    ) |>
+    add_trace(
+      x =  df$x[n],
+      y =  df$y[n],
+      type = 'scatter',
+      mode = 'markers',
+      name = 'Min',
+      marker = list(color = "red")
+    ) |> add_trace(
+      x =  edf$x,
+      y =  edf$y,
+      type = 'scatter',
+      mode = 'markers',
+      name = 'Вычисления функции',
+      marker = list(color = "red")
+    )
+}
+
+library(DescTools)
+gradient_path <- function(f_g, path)
+{
+  df <- path
+  rescale <- function(x,first,last){(last-first)/(max(x)-min(x))*(x-min(x))+first}
+  
+  lower <- apply(df, 2, min)
+  upper <- apply(df, 2, max)
+  x <- seq(lower[1], upper[1], length.out = 15)
+  y <- seq(lower[2], upper[2], length.out = 15)
+  n <- nrow(df)
+  
+  g_grid <- expand.grid(x = x, y = y)
+  g_val <- apply(g_grid, 1,\(par) {gr <- f_g(par); CartToPol(gr[1],gr[2]) |> unlist()}) |> t()
+  
+  g_grid$theta <- g_val[,2]
+  g_grid$r <- g_val[,1] |> log() |> rescale(0, ((upper - lower) / 15) |> min() )
+
+  fig <- ggplot(g_grid, aes(x, y)) +
+  geom_point() +
+  geom_spoke(aes(angle = theta, radius = r))
+
+   ggplotly(fig) |>
+    add_trace(
+      x =  df$x,
+      y =  df$y,
+      type = 'scatter',
+      mode = 'lines+markers',
+      name = 'оптимизация'
+    ) |>
+    add_trace(
+      x =  df$x[1],
+      y =  df$y[1],
+      type = 'scatter',
+      mode = 'markers',
+      marker = list(color = "purple"),
+      name = 'начало'
+    ) |>
+    add_trace(
+      x =  df$x[n],
+      y =  df$y[n],
+      type = 'scatter',
+      mode = 'markers',
+      name = 'Min',
+      marker = list(color = "red")
+    )
+}
+
+### Plotly & mathml
+
+# library(mathml)
+library(extraDistr)
+library(digest)
+library(extraDistr)
+library(optimx)
+library(Deriv)
+
+base_seed <- digest2int('Sikalenka Mikhail')
+listN <- function(...){
+    anonList <- list(...)
+    names(anonList) <- as.character(substitute(list(...)))[-1]
+    anonList
+}
+
+df <- data.frame(
+  method = c(),
+  num_features = c(),
+  iter = c(),
+  MSE_metric = c()
+)
+
+
+# Процедура анализа
+
+# Задание 1. Главное не поскользнуться
+
+task1_gen <- function()
+{
+  set.seed(base_seed)
+  la <- rdunif(1, 7, 12) |> as.integer()
+  ca <- rdunif(1, 7, 12) |> as.integer()
+  a <- rdunif(1, 1, 3) |> as.integer()
+  b <- rdunif(1, 1, 5) |> as.integer()
+  o <- rdunif(1, 1, 4) |> as.integer()
+  expr <-
+    substitute(la * frac(1L, 1L + exp(-x)) + ca * cos(o*x) + a * x ^ 2L - b * x)
+  f <- \(x) eval(expr)
+  listN(f, expr)
+}
+task1 <- task1_gen()
+
+task1
+
+task1 <- list(
+  f = function(x){
+    7 / (1 + exp(-x)) + 9 * cos(3 * x) + 2 * x ^ 2 + 5 * x
+  }
+)
+
+x <- seq(-5, 5, by = 0.1)
+y <- task1$f(x)
+
+op <- optimise(task1$f, c(-5, 5))
+
+data <- data.frame(x, y)
+fig <- plot_ly(data, x = ~x, y = ~y, type = 'scatter', mode = 'lines', name = "Function") |>
+  add_markers(x = op$minimum, y = task1$f(op$minimum), color = 'red', size = 5, name = "Minimum")
+
+fig
+
+row <- data.frame(
+  method = "optimise",
+  num_features = c(1),
+  iter = c(1),
+  MSE_metric = c((-1.07241 - op$minimum)^2)
+)
+
+df <- rbind(df, row)
+df
+
+# Задание 2. Горбы и ямы
+
+task2_gen <- function()
+{
+  set.seed(base_seed+2)
+  a <- rdunif(1, 5, 10) |> as.integer()
+  c <- rdunif(1, 5, 10) |> as.integer()
+  b <- (sqrt(a*c) - 1) |> ceiling() |> as.integer()
+  
+  ae1 <- rdunif(1, 5, 10) |> as.integer()
+  ae2 <- rdunif(1, 5, 10) |> as.integer()
+  ae3 <- rdunif(1, 5, 10) |> as.integer()
+  x01 <- rdunif(1, -3, 3) |> as.integer()
+  x02 <- rdunif(1, -3, 3) |> as.integer()
+  x03 <- rdunif(1, -3, 3) |> as.integer()
+  y01 <- rdunif(1, -3, 3) |> as.integer()
+  y02 <- rdunif(1, -3, 3) |> as.integer()
+  y03 <- rdunif(1, -3, 3) |> as.integer()
+  sx1 <- rdunif(1, 1, 5) |> as.integer()
+  sx2 <- rdunif(1, 1, 5) |> as.integer()
+  sx3 <- rdunif(1, 1, 5) |> as.integer()
+  sy1 <- rdunif(1, 1, 5) |> as.integer()
+  sy2 <- rdunif(1, 1, 5) |> as.integer()
+  sy3 <- rdunif(1, 1, 5) |> as.integer()
+  
+  expr <- substitute(
+    a * x ^ 2L + 2L * b * x * y + c * y ^ 2L + ae1 * exp(-(frac((x - x01) ^ 2L,sx1) + frac((y - y01) ^ 2L , sy1))) + ae2 * exp(-(frac((x - x02) ^ 2L,sx2) + frac((y - sy2) ^ 2L , sy2))) + ae3 * exp(-(frac((x - x03) ^ 2L , sx3) + frac((y - y03) ^ 2L , sy3))))
+  
+  f <- \(par) eval(expr, list(x = par[1], y = par[2]))
+  listN(f, expr)
+}
+task2 <- task2_gen()
+
+task2
+
+### Strange poly...
+
+task2 <- list(
+  f = function(par){
+    x <- par[1]
+    y <- par[2]
+    # 9 * x ^ 2 + 26 * x * y + 5 * y ^ 2 + 6 * 
+    -exp(-((((x+2)^2)/2) + ((y-2)^2)/4))
+    # -2 * exp(-((((x+2)^2)/2) + ((y-2)^2)/4)) + 1 * exp(-((((x-1)^2)/4) + ((y-4)^2)/4)) -3*exp(-((((x-3)^2)/4) + ((y-1)^2)/3))
+  },
+  
+  gradF = function(par){
+    #spot <- list(x = par[1], y = par[2])
+    # 9 * x ^ 2 + 26 * x * y + 5 * y ^ 2 + 6 * 
+    
+    x <- par[1]
+    y <- par[2]
+    dx <- (x+2)*(exp(-((((x+2)^2)/2) + ((y-2)^2)/4)))
+    dy <- 0.5*(y-2)*(exp(-((((x+2)^2)/2) + ((y-2)^2)/4)))
+    c(dx, dy)
+    
+    #x <- Deriv("x")
+    #y <- Deriv("y")
+    
+    #Func <- expression(-2 * exp(-((((x+2)^2)/2) + ((y-2)^2)/4)) + 1 * exp(-((((x-1)^2)/4) + ((y-4)^2)/4)) -3*exp(-((((x-3)^2)/4) + ((y-1)^2)/3)))
+    
+    #dfdx <- deriv(Func, "x")
+    #dfdy <- deriv(Func, "y")
+    
+    #c(eval(dfdx, envir = spot)[1], eval(dfdy, envir = spot)[1])
+  },
+  
+  hess_f = function(par){
+      # spot <- list(x = par[1], y = par[2])
+      # 
+      # x <- Deriv("x")
+      # y <- Deriv("y")
+      # 
+      # Func <- expression(-2 * exp(-((((x+2)^2)/2) + ((y-2)^2)/4)) + 1 * exp(-((((x-1)^2)/4) + ((y-4)^2)/4)) -3*exp(-((((x-3)^2)/4) + ((y-1)^2)/3)))
+      # 
+      # dfdx <- deriv(Func, "x")
+      # dfdy <- deriv(Func, "y")
+      # 
+      # ddfdxx <- deriv(dfdx, "x")
+      # ddfdyy <- deriv(dfdy, "y")
+      # ddfdxy <- deriv(dfdx, "y")
+      # 
+      # rbind(c(eval(ddfdxx, envir = spot)[1], eval(ddfdxy, envir = spot)[1]),
+      #       c(eval(ddfdxy, envir = spot)[1], eval(ddfdyy, envir = spot)[1]))
+    
+      x <- par[1]
+      y <- par[2]
+      ddx <- (x^2+4*x+3)*(-exp(-((((x+2)^2)/2) + ((y-2)^2)/4)))
+      ddy <- -0.25*(y^2-4*y+2)*(exp(-((((x+2)^2)/2) + ((y-2)^2)/4)))
+      dxdy <- -0.5*(x+2)*(y-2)*(exp(-((((x+2)^2)/2) + ((y-2)^2)/4)))
+      rbind(c(ddx, dxdy), c(dxdy, ddy))
+  }
+  
+)
+  
+
+start <- c(-5,5)
+
+#### Nelder-Mead
+
+library(nloptr)
+Res <- nloptr(
+  x0 = start,
+  eval_f = task2$f,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task2$f,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF, res$path)
+
+row <- data.frame(
+  method = "Nelder-Mead",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((-1 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### PRAXIS
+
+Res <- nloptr(
+  x0 = start,
+  eval_f = task2$f,
+  opts = list(algorithm = 'NLOPT_LN_PRAXIS', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task2$f,
+  opts = list(algorithm = 'NLOPT_LN_PRAXIS', xtol_rel = 1.0e-8)
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF, res$path)
+
+row <- data.frame(
+  method = "PRAXIS",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((-1 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### BFGS
+
+Res <- nloptr(
+  x0 = start,
+  eval_f = task2$f,
+  eval_grad_f = task2$gradF,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task2$f,
+  eval_grad_f = task2$gradF,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF, res$path)
+
+row <- data.frame(
+  method = "BFGS",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((-1 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### CG
+
+library(optimx)
+Res <- optimx(
+  par = start,
+  fn = task2$f,
+  gr = task2$gradF,
+  hess = task2$hess_f,
+  method = 'CG'
+)
+
+Res
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF,res$path)
+
+row <- data.frame(
+  method = "CG",
+  num_features = c(2),
+  iter = c(Res$niter),
+  MSE_metric = c((-1 - Res$value)^2)
+)
+
+df <- rbind(df, row)
+df
+
+# Задание 3. Окружен, но не сломлен
+
+task3_linear <- function(){
+  set.seed(base_seed+3)
+  a <- rdunif(1, 2, 10) |> as.integer()
+  b <- rdunif(1,-10, 10) |> as.integer()
+  c <- rdunif(1,-10, 10) |> as.integer()
+  f <- rdunif(1, -10, 10) |> as.integer()
+  f1 <- round(f/2L) |> as.integer()
+  first <- substitute(a * x + b * y <= f)
+  second <- substitute(frac(x, a) + c * y >= -f1)
+  list(first = first, second = second)
+}
+task3_quadratic <- function(){
+  set.seed(base_seed+3)
+  a <- rdunif(1, 6, 15) |> as.integer()
+  c <- rdunif(1, 2, 10) |> as.integer()
+  k <- rdunif(1, 1, 5) |> as.integer()
+  b <- (sqrt(a * c) - 1) |> ceiling() |> as.integer()
+  first <- substitute(frac(x ^ 2L, a) + frac(y ^ 2L, c) - frac(x * y, b) <= 6L)
+  second <- substitute(frac(x ^ 2L, c) + frac(y ^ 2L, a * k) + frac(x * y, b) <= 3L)
+  listN(first, second)
+}
+
+task3_gen <- function()
+  if(sample(c(TRUE,FALSE),1)) task3_quadratic() else task3_linear()
+
+task3 <- task3_gen()
+
+task3
+
+Global_min <- c(-2, 2)
+
+#### cobyla
+
+constr_ineq <- function(par){
+  p1 <- par[1]
+  p2 <- par[2]
+  c(-10 * p1 - 8* p2 + 8, 0.1 * p1 - 8 * p2 + 4)
+}
+
+Res <- nloptr(
+  x0 = start,
+  eval_f = task2$f,
+  eval_g_ineq = constr_ineq,
+  opts = list(
+    algorithm = 'NLOPT_LN_COBYLA',
+    xtol_rel = 1.0e-8
+  )
+)
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task2$f,
+  #eval_grad_f = f_g,
+  eval_g_ineq = constr_ineq,
+  #eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LN_COBYLA',
+    xtol_rel = 1.0e-8
+  )
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF, res$path)
+
+row <- data.frame(
+  method = "cobyla",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((-0.72921 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### mma
+
+constr_ineq_jac <- function(par){
+  rbind(c(-10, -8),
+        c(0.1, -8))
+}
+
+Rrs <- nloptr(
+  x0 = start,
+  eval_f = task2$f,
+  eval_grad_f = task2$gradF,
+  eval_g_ineq = constr_ineq,
+  eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_MMA',
+    xtol_rel = 1.0e-8
+  )
+)
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task2$f,
+  eval_grad_f = task2$gradF,
+  eval_g_ineq = constr_ineq,
+  eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_MMA',
+    xtol_rel = 1.0e-8
+  )
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF, res$path)
+
+row <- data.frame(
+  method = "mma",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((-0.72921 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### ccsa
+
+Res <- nloptr(
+  x0 = start,
+  eval_f = task2$f,
+  eval_grad_f = task2$gradF,
+  eval_g_ineq = constr_ineq,
+  eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_CCSAQ',
+    xtol_rel = 1.0e-8
+  )
+)
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task2$f,
+  eval_grad_f = task2$gradF,
+  eval_g_ineq = constr_ineq,
+  eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_MMA',
+    xtol_rel = 1.0e-8
+  )
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF, res$path)
+
+row <- data.frame(
+  method = "ccsa",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((-0.72921 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### sslqp
+
+Res <- nloptr(
+  x0 = start,
+  eval_f = task2$f,
+  eval_grad_f = task2$gradF,
+  eval_g_ineq = constr_ineq,
+  eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_SLSQP',
+    xtol_rel = 1.0e-8
+  )
+)
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task2$f,
+  eval_grad_f = task2$gradF,
+  eval_g_ineq = constr_ineq,
+  eval_jac_g_ineq = constr_ineq_jac,
+  opts = list(
+    algorithm = 'NLOPT_LD_SLSQP',
+    xtol_rel = 1.0e-8
+  )
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF, res$path)
+
+row <- data.frame(
+  method = "sslqp",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((-0.72921 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+# Задание 4. За стеной
+
+task4_gen <- function(){
+  set.seed(base_seed+4)
+  x_min <- rdunif(1, -10, 10) |> as.integer()
+  x_max <- rdunif(1,x_min, x_min + 10) |> as.integer()
+  y_min <- rdunif(1, -10, 10) |> as.integer()
+  y_max <- rdunif(1, y_min, y_min+10) |> as.integer()
+  listN(x_min,x_max,y_min,y_max)
+}
+
+task4 <- task4_gen()
+
+task4
+
+start <- c(13, 4.1)
+lo <- c(task4$x_min |> as.numeric(), task4$y_min |> as.numeric())
+up <- c(task4$x_max |> as.numeric(), task4$y_max |> as.numeric())
+
+#### Nelder-Mead
+
+Res <- nloptr(
+  x0 = start,
+  eval_f = task2$f,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task2$f,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF, res$path)
+
+row <- data.frame(
+  method = "Nelder-Mead (Boarders)",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### tnewton
+
+Res <- nloptr(
+  x0 = start,
+  eval_f = task2$f,
+  eval_grad_f = task2$gradF,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LD_TNEWTON_PRECOND_RESTART', xtol_rel = 1.0e-8)
+)
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task2$f,
+  eval_grad_f = task2$gradF,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LD_TNEWTON_PRECOND_RESTART', xtol_rel = 1.0e-8)
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF, res$path)
+
+row <- data.frame(
+  method = "tnewton (Boarders)",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### BFGS
+
+Res <- nloptr(
+  x0 = start,
+  eval_f = task2$f,
+  eval_grad_f = task2$gradF,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+)
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task2$f,
+  eval_grad_f = task2$gradF,
+  lb = lo,
+  ub = up,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF, res$path)
+
+row <- data.frame(
+  method = "BFGS (Boarders)",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### Rcg
+
+Res <- optimx(
+  par = start,
+  fn = task2$f,
+  gr = task2$gradF,
+  hess = task2$hess_f,
+  lower = lo,
+  upper = up,
+  method = 'Rcgmin'
+)
+
+Res
+
+res <- optimx_trace(
+  par = start,
+  fn = task2$f,
+  gr = task2$gradF,
+  hess = task2$hess_f,
+  lower = lo,
+  upper = up,
+  method = 'Rcgmin'
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF,res$path)
+
+row <- data.frame(
+  method = "Rcg (Boarders)",
+  num_features = c(2),
+  iter = c(Res$niter),
+  MSE_metric = c((-1 - Res$value)^2)
+)
+
+df <- rbind(df, row)
+df
+
+# Задание 5. Гладко было на бумаге, да забыли про овраги
+
+task5_gen <- function(){
+  set.seed(base_seed+5)
+  a1 <- rdunif(1, 5, 15) |> as.integer()
+  b1 <- rdunif(1, 5, 15) |> as.integer()
+  c1 <- rdunif(1, 5, 15) |> as.integer()
+  a2 <- rdunif(1, 1, 5) |> as.integer()
+  b2 <- rdunif(1, 1, 5) |> as.integer()
+  c2 <- rdunif(1, 1, 5) |> as.integer()
+  expr <-
+    substitute((a1 * x + b1 * y - c1) ^ 4L + (a2 * x + b2 * y - c2) ^ 4L)
+  
+  f <- \(par) eval(expr, list(x = par[1], y = par[2]))
+  listN(f, expr)
+}
+task5 <- task5_gen()
+
+task5
+
+task5 <- list(
+  f = function(par){
+    x <- par[1]
+    y <- par[2]
+    
+    (15*x + 12*y - 7)^4 + (4*x + 4*y -5)^4
+  }, 
+  
+  gradF = function(par){
+    x <- par[1]
+    y <- par[2]
+    
+    dx <- 15*4*(15*x + 12*y - 7)^3 + 4*4*(4*x + 4*y -5)^3
+    dy <- 12*4*(15*x + 12*y - 7)^3 + 4*4*(4*x + 4*y -5)^3
+    c(dx, dy)
+  }
+)
+
+task5$f(c(1,2))
+
+#### Nelder-Mead
+
+start <- c(5, 5)
+Res <- nloptr(
+  x0 = start,
+  eval_f = task5$f,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task5$f,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task5$gradF, res$path)
+
+row <- data.frame(
+  method = "Nelder-Mead (Ravines)",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### BFGS
+
+Res <- nloptr(
+  x0 = start,
+  eval_f = task5$f,
+  eval_grad_f = task5$gradF,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task5$f,
+  eval_grad_f = task5$gradF,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task2$gradF, res$path)
+
+row <- data.frame(
+  method = "BFGS (Ravines)",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### tnewton
+
+Res <- nloptr(
+  x0 = start,
+  eval_f = task5$f,
+  eval_grad_f = task5$gradF,
+  opts = list(algorithm = 'NLOPT_LD_TNEWTON_PRECOND_RESTART', xtol_rel = 1.0e-8)
+)
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task5$f,
+  eval_grad_f = task5$gradF,
+  opts = list(algorithm = 'NLOPT_LD_TNEWTON_PRECOND_RESTART', xtol_rel = 1.0e-8)
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task5$gradF, res$path)
+
+row <- data.frame(
+  method = "tnewton (Ravines)",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### varmetric
+
+Res <- nloptr(
+  x0 = start,
+  eval_f = task5$f,
+  eval_grad_f = task5$gradF,
+  opts = list(algorithm = 'NLOPT_LD_VAR2', xtol_rel = 1.0e-8)
+)
+
+Res
+
+res <- nloptr_trace(
+  x0 = start,
+  eval_f = task5$f,
+  eval_grad_f = task5$gradF,
+  opts = list(algorithm = 'NLOPT_LD_VAR2', xtol_rel = 1.0e-8)
+)
+
+animated_path(res)
+
+static_path(res)
+
+gradient_path(task5$gradF, res$path)
+
+row <- data.frame(
+  method = "varmetric (Ravines)",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+# Задание 6. Дальше больше
+
+task6_gen <- function(){
+  set.seed(base_seed+6)
+  b <- rdunif(1, 5, 15) |> as.integer()
+  L50 <- rdunif(50, 5, 15) |> as.integer()
+  L100 <- rdunif(100, 5, 15) |> as.integer()
+  L500 <- rdunif(500, 5, 15) |> as.integer()
+  L1000 <- rdunif(1000, 5, 15) |> as.integer()
+  f50 <- \(par) sum(par*L50 - b)^2
+  f100 <- \(par) sum(par*L100 - b)^2
+  f500 <- \(par) sum(par*L500 - b)^2
+  f1000 <- \(par) sum(par*L1000 - b)^2
+  listN(f50,f100,f500,f1000,L50,L100,L500,L1000,b)
+}
+
+task6 <- task6_gen()
+
+task6_func <- list(
+  f50 = function(par){
+    (sum(par * task6$L50) - task6$b)^2
+  },
+  
+  df50 = function(par){
+    s <- sum(par * task6$L50) - task6$b
+    s * 2 * task6$L50
+  },
+  
+  hf50 = function(par){
+    hessian_matrix <- matrix(0, nrow = 50, ncol = 50)
+    for (i in 1:50) {
+      for (j in 1:50) {
+        hessian_matrix[i, j] <- 2 * task6$L50[i] * task6$L50[j]
+      }
+    }
+    return(hessian_matrix)
+  },
+  
+  f100 = function(par){
+    (sum(par * task6$L100) - task6$b)^2
+  },
+  
+  df100 = function(par){
+    s <- sum(par * task6$L100) - task6$b
+    s * 2 * task6$L100
+  },
+  
+  hf100 = function(par){
+    hessian_matrix <- matrix(0, nrow = 100, ncol = 100)
+    for (i in 1:100) {
+      for (j in 1:100) {
+        hessian_matrix[i, j] <- 2 * task6$L100[i] * task6$L100[j]
+      }
+    }
+    return(hessian_matrix)
+  },
+  
+  f500 = function(par){
+    (sum(par * task6$L500) - task6$b)^2
+  },
+  
+  df500 = function(par){
+    s <- sum(par * task6$L500) - task6$b
+    s * 2 * task6$L500
+  },
+  
+  hf500 = function(par){
+    hessian_matrix <- matrix(0, nrow = 500, ncol = 500)
+    for (i in 1:500) {
+      for (j in 1:500) {
+        hessian_matrix[i, j] <- 2 * task6$L500[i] * task6$L500[j]
+      }
+    }
+    return(hessian_matrix)
+  },
+  
+  f1000 = function(par){
+    (sum(par * task6$L1000) - task6$b)^2
+  },
+  
+  df1000 = function(par){
+    s <- sum(par * task6$L1000) - task6$b
+    s * 2 * task6$L1000
+  },
+  
+  hf1000 = function(par){
+    hessian_matrix <- matrix(0, nrow = 1000, ncol = 1000)
+    for (i in 1:1000) {
+      for (j in 1:1000) {
+        hessian_matrix[i, j] <- 2 * task6$L1000[i] * task6$L1000[j]
+      }
+    }
+    return(hessian_matrix)
+  }
+)
+
+### Diffrent N add b!
+
+### 50
+
+#### Nelder-Mead
+
+Res <- nloptr(
+  x0 = rep(0, 50),
+  eval_f = task6_func$f50,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+row <- data.frame(
+  method = "Nelder-Mead (50)",
+  num_features = c(50),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### tnewton
+
+Res <- nloptr(
+  x0 = rep(0, 50),
+  eval_f = task6_func$f50,
+  eval_grad_f = task6_func$df50,
+  opts = list(algorithm = 'NLOPT_LD_TNEWTON_PRECOND_RESTART', xtol_rel = 1.0e-8)
+)
+
+Res
+
+row <- data.frame(
+  method = "tnewton (50)",
+  num_features = c(50),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### BFGS
+
+Res <- nloptr(
+  x0 = rep(0, 50),
+  eval_f = task6_func$f50,
+  eval_grad_f = task6_func$df50,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+)
+
+Res
+
+row <- data.frame(
+  method = "BFGS (50)",
+  num_features = c(50),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### Rcg
+
+Res <- optimx(
+  par = rep(0, 50),
+  fn = task6_func$f50,
+  gr = task6_func$df50,
+  hess = task6_func$hf50,
+  method = 'Rcgmin'
+)
+
+Res
+
+row <- data.frame(
+  method = "Rcg (50)",
+  num_features = c(50),
+  iter = c(Res$niter),
+  MSE_metric = c((0 - Res$value)^2)
+)
+
+df <- rbind(df, row)
+df
+
+### 100
+
+#### Nelder-Mead
+
+Res <- nloptr(
+  x0 = rep(0, 100),
+  eval_f = task6_func$f100,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+row <- data.frame(
+  method = "Nelder-Mead (100)",
+  num_features = c(100),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### tnewton
+
+Res <- nloptr(
+  x0 = rep(0, 100),
+  eval_f = task6_func$f100,
+  eval_grad_f = task6_func$df100,
+  opts = list(algorithm = 'NLOPT_LD_TNEWTON_PRECOND_RESTART', xtol_rel = 1.0e-8)
+)
+
+Res
+
+row <- data.frame(
+  method = "tnewton (100)",
+  num_features = c(100),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### BFGS
+
+Res <- nloptr(
+  x0 = rep(0, 100),
+  eval_f = task6_func$f100,
+  eval_grad_f = task6_func$df100,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+)
+
+Res
+
+row <- data.frame(
+  method = "BFGS (100)",
+  num_features = c(100),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### Rcg
+
+Res <- optimx(
+  par = rep(0, 100),
+  fn = task6_func$f100,
+  gr = task6_func$df100,
+  hess = task6_func$hf100,
+  method = 'Rcgmin'
+)
+
+Res
+
+row <- data.frame(
+  method = "Rcg (100)",
+  num_features = c(100),
+  iter = c(Res$niter),
+  MSE_metric = c((0 - Res$value)^2)
+)
+
+df <- rbind(df, row)
+df
+
+### 500
+
+#### Nelder-Mead
+
+Res <- nloptr(
+  x0 = rep(0, 500),
+  eval_f = task6_func$f500,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+row <- data.frame(
+  method = "Nelder-Mead (500)",
+  num_features = c(500),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### tnewton
+
+Res <- nloptr(
+  x0 = rep(0, 500),
+  eval_f = task6_func$f500,
+  eval_grad_f = task6_func$df500,
+  opts = list(algorithm = 'NLOPT_LD_TNEWTON_PRECOND_RESTART', xtol_rel = 1.0e-8)
+)
+
+Res
+
+row <- data.frame(
+  method = "tnewton (500)",
+  num_features = c(500),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### BFGS
+
+Res <- nloptr(
+  x0 = rep(0, 500),
+  eval_f = task6_func$f500,
+  eval_grad_f = task6_func$df500,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+)
+
+Res
+
+row <- data.frame(
+  method = "BFGS (500)",
+  num_features = c(500),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### Rcg
+
+Res <- optimx(
+  par = rep(0, 500),
+  fn = task6_func$f500,
+  gr = task6_func$df500,
+  hess = task6_func$hf500,
+  method = 'Rcgmin'
+)
+
+Res
+
+row <- data.frame(
+  method = "Rcg (500)",
+  num_features = c(500),
+  iter = c(Res$niter),
+  MSE_metric = c((0 - Res$value)^2)
+)
+
+df <- rbind(df, row)
+df
+
+### 1000
+
+#### Nelder-Mead
+
+Res <- nloptr(
+  x0 = rep(0, 1000),
+  eval_f = task6_func$f1000,
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+row <- data.frame(
+  method = "Nelder-Mead (1000)",
+  num_features = c(1000),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### tnewton
+
+Res <- nloptr(
+  x0 = rep(0, 1000),
+  eval_f = task6_func$f1000,
+  eval_grad_f = task6_func$df1000,
+  opts = list(algorithm = 'NLOPT_LD_TNEWTON_PRECOND_RESTART', xtol_rel = 1.0e-8)
+)
+
+Res
+
+row <- data.frame(
+  method = "tnewton (1000)",
+  num_features = c(1000),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### BFGS
+
+Res <- nloptr(
+  x0 = rep(0, 1000),
+  eval_f = task6_func$f1000,
+  eval_grad_f = task6_func$df1000,
+  opts = list(algorithm = 'NLOPT_LD_LBFGS', xtol_rel = 1.0e-8)
+)
+
+Res
+
+row <- data.frame(
+  method = "BFGS (1000)",
+  num_features = c(1000),
+  iter = c(Res$iterations),
+  MSE_metric = c((0 - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+#### Rcg
+
+Res <- optimx(
+  par = rep(0, 1000),
+  fn = task6_func$f1000,
+  gr = task6_func$df1000,
+  hess = task6_func$hf1000,
+  method = 'Rcgmin'
+)
+
+Res
+
+row <- data.frame(
+  method = "Rcg (1000)",
+  num_features = c(1000),
+  iter = c(Res$niter),
+  MSE_metric = c((0 - Res$value)^2)
+)
+
+df <- rbind(df, row)
+df
+
+# Задание 7. Реальный мир
+
+task7_gen <- function(){
+  set.seed(base_seed + 4)
+  get_fun <- function(path)
+  {
+    source(path, local = TRUE)
+    as.list(environment())
+  }
+  l <- lapply('Box' |> dir(recursive = TRUE, full.names = TRUE) |> sample(3), get_fun)
+  names(l) <- sapply(seq_len(3), \(i) paste0('t', i))
+  l
+}
+task7 <- task7_gen()
+
+task7$t1$get_xl(3)
+task7$t1$get_xu(3)
+
+task7$t1$get_xmin(3)
+task7$t1$get_fmin(1)
+
+### t1
+
+task7$t1$BoxBetts
+
+Res <- nloptr(
+  x0 = rep(0.8, 3),
+  eval_f = task7$t1$BoxBetts,
+  # lb = task7$t1$get_xl(3),
+  # ub = task7$t1$get_xu(3),
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+row <- data.frame(
+  method = "Nelder-Mead (BoxBetts)",
+  num_features = c(3),
+  iter = c(Res$iterations),
+  MSE_metric = c((task7$t1$get_fmin(1) - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+### t2
+
+task7$t2$Cigar
+
+### Cude -- ????
+### Box/Layeb/Layeb06.R:64:0: unexpected end of input BROKEN 62:   } 63:   
+
+Res <- nloptr(
+  x0 = 0,
+  eval_f = task7$t2$Cigar,
+  lb = task7$t2$get_xl(1),
+  ub = task7$t2$get_xu(1),
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+row <- data.frame(
+  method = "Nelder-Mead (Cigar)",
+  num_features = c(1),
+  iter = c(Res$iterations),
+  MSE_metric = c((task7$t2$get_fmin(1) - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+```
+
+### t3
+task7_gen <- function(){
+  set.seed(base_seed + 2)
+  get_fun <- function(path)
+  {
+    source(path, local = TRUE)
+    as.list(environment())
+  }
+  l <- lapply('Box' |> dir(recursive = TRUE, full.names = TRUE) |> sample(3), get_fun)
+  names(l) <- sapply(seq_len(3), \(i) paste0('t', i))
+  l
+}
+task7 <- task7_gen()
+
+task7$t3$CrossInTray
+
+Res <- nloptr(
+  x0 = rep(0, 2),
+  eval_f = task7$t3$CrossInTray,
+  lb = task7$t3$get_xl(2),
+  ub = task7$t3$get_xu(2),
+  opts = list(algorithm = 'NLOPT_LN_NELDERMEAD', xtol_rel = 1.0e-8)
+  )
+
+Res
+
+
+row <- data.frame(
+  method = "Nelder-Mead (CrossInTray)",
+  num_features = c(2),
+  iter = c(Res$iterations),
+  MSE_metric = c((task7$t3$get_fmin(1) - Res$objective)^2)
+)
+
+df <- rbind(df, row)
+df
+
+df
+
