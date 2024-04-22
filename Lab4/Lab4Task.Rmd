@@ -327,6 +327,7 @@ gradient_path <- function(f_g, path)
 }
 ```
 
+### Plotly & mathml
 
 ```{r include=FALSE, message=FALSE}
 # library(mathml)
@@ -379,8 +380,6 @@ task1 <- task1_gen()
 ```{r}
 task1
 ```
-
-`r (task1$expr)`
 
 ```{r}
 task1 <- list(
@@ -445,6 +444,8 @@ task2 <- task2_gen()
 ```{r}
 task2
 ```
+
+### Strange poly...
 
 ```{r}
 task2 <- list(
@@ -619,11 +620,7 @@ static_path(res)
 gradient_path(task2$gradF,res$path)
 ```
 
-
-
 Найти безусловный минимум функции двух переменных.
-
-`r (task2$expr)`
 
 С помощью методов: Nelder-Mead, PRAXIS, BFGS, CG.
 
@@ -674,10 +671,6 @@ task3 <- task3_gen()
 Решить задачу минимизации
 
 с ограничениями
-
-`r (task3$first)`
-
-`r (task3$second)`
 
 С помощью методов: cobyla, mma, ccsa, sslqp.
 Провести анализ.
@@ -875,8 +868,6 @@ task4 <- task4_gen()
 
 Решить задачу минимизации
 
-`r (task2$expr)`
-
 с ограничениями
 
 $$\begin{cases}
@@ -1058,8 +1049,6 @@ task5
 ```
 
 Найти безусловный минимум сильно вытянутой вдоль функции двух переменных
-
-`r (task5$expr)`
 
 Вызвать функцию можно через объект 
 
@@ -1314,6 +1303,8 @@ task6_func <- list(
 Гиперэллипсоиды для 50, 100, 1000 переменных.
 С помощью методов: Nelder-Mead, tnewton, BFGS, Rcg.
 
+### Diffrent N add b!
+
 ### 50
 
 ```{r}
@@ -1524,9 +1515,8 @@ nloptr(
 task7$t2$BiggsEXP4
 ```
 
-### Box/Layeb/Layeb06.R:64:0: unexpected end of input BROKEN
-62:   }
-63:   
+### Cude -- ????
+### Box/Layeb/Layeb06.R:64:0: unexpected end of input BROKEN 62:   } 63:   
 
 ```{r}
 nloptr(

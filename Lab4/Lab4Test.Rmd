@@ -1033,6 +1033,8 @@ nloptr
 
 neldermead 
 
+# AAAAAAAAAAAAAAAAAAAAAAAAAA
+
 Whenever a new point would lie outside the bound constraints, Box advocates moving it "just inside" the constraints by some fixed "small" distance of 10−8 or so. I couldn't see any advantage to using a fixed distance inside the constraints, especially if the optimum is on the constraint, so instead I move the point exactly onto the constraint in that case. The danger with implementing bound constraints in this way (or by Box's method) is that you may collapse the simplex into a lower-dimensional subspace. I'm not aware of a better way, however. In any case, this collapse of the simplex is somewhat ameliorated by restarting, such as when Nelder-Mead is used within the Subplex algorithm below.
 
 ###### Nloptr Nelder mead
@@ -1335,6 +1337,8 @@ gradient_path(f_g,res$path)
 
 ##### Модификации сопряженных градиентов и т. д.
 
+
+# :)
 Тут другое описание.
 
 ###### optimx Rcgmin
