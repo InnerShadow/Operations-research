@@ -2141,3 +2141,22 @@ df
 df
 ```
 
+
+## Discription
+Nelder-Mead - do not need GRAD - simplex iteration in $R^{n}$ space.
+PRAXIS - do not need GRAD, adapt step & direction in case of delta_x val
+BFGS - use GRAD to find func optimum.
+CG - use GRAD, good if grad have huge diffrence if diffrent dirrections
+cobyla - use taxis, no GRAD, find non-condition oprimum
+mma - push Asymptotes to find optimum
+ccsa - evolv method, adapt cov matrix
+sslqp - use sequential subspaces to find optimum
+tnewton - gradient descent with newton method
+Rcg - сопряжённые градиенты
+varmetric - variance metrics to find optimum
+
+
+
+
+
+
