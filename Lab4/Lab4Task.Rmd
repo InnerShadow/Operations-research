@@ -2094,8 +2094,7 @@ df
 ```{r}
 task7_gen <- function(){
   set.seed(base_seed + 2)
-  get_fun <- function(path)
-  {
+  get_fun <- function(path){
     source(path, local = TRUE)
     as.list(environment())
   }
