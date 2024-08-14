@@ -328,8 +328,6 @@ gradient_path <- function(f_g, path)
 }
 ```
 
-### Plotly & mathml
-
 ```{r include=FALSE, message=FALSE}
 # library(mathml)
 library(extraDistr)
@@ -338,7 +336,7 @@ library(extraDistr)
 library(optimx)
 library(Deriv)
 
-base_seed <- digest2int('Sikalenka Mikhail')
+base_seed <- digest2int('Mozol Nazar')
 listN <- function(...){
     anonList <- list(...)
     names(anonList) <- as.character(substitute(list(...)))[-1]
@@ -478,7 +476,6 @@ task2 <- task2_gen()
 task2
 ```
 
-### Strange poly...
 
 ```{r}
 task2 <- list(
@@ -2062,9 +2059,6 @@ df
 task7$t2$Cigar
 ```
 
-### Cude -- ????
-### Box/Layeb/Layeb06.R:64:0: unexpected end of input BROKEN 62:   } 63:   
-
 ```{r}
 Res <- nloptr(
   x0 = 0,
@@ -2132,8 +2126,6 @@ row <- data.frame(
 df <- rbind(df, row)
 df
 ```
-
-### GallagherGaussian101BBOB : Error in get_fmin(dim) : could not find function "get_fmin"
 
 
 ```{r}
